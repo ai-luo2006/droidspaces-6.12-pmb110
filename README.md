@@ -75,7 +75,7 @@
 │   ├── net_macvlan/ net_ip6nat/
 │   └── scripts/               构建与打包脚本
 └── docs/                      📖 文档
-    ├── tutorials/             ⭐ 教程（从零到跑起来，6 篇）
+    ├── tutorials/             ⭐ 教程（从零到跑起来 6 篇 + 移植自建 1 篇）
     ├── PRINCIPLE.md           原理（中）
     ├── en/                    英文版
     ├── TROUBLESHOOTING.md     ⭐ 踩坑记录，出问题先看这个
@@ -96,241 +96,26 @@
 | 4 | [容器里跑 Docker](docs/tutorials/04-docker.md) | dockerd、镜像、端口、数据目录 | 20 分钟 |
 | 5 | [传文件与备份](docs/tutorials/05-files.md) | 宿主↔容器、打包、迁移、恢复 | 15 分钟 |
 | 6 | [升级 / 回退 / 卸载](docs/tutorials/06-maintenance.md) | 换版本、安全卸载、别踩的坑 | 10 分钟 |
+| 7 | **[自己构建 / 适配你的手机](docs/tutorials/07-build-your-own.md)** | 换机型换内核时，怎么编出能 insmod 的 ko | 40 分钟 |
 
-> 教程目录：[`docs/tutorials/`](docs/tutorials/README.md)。只有一加 Ace 6 至尊版（PMB110 / 6.12.69）适用，别的机型不要照抄。
+> 教程目录：[`docs/tutorials/`](docs/tutorials/README.md)。1~6 篇只适用于一加 Ace 6 至尊版（PMB110 / 6.12.69）。
+> 第 7 篇是**移植**用的：教你把同一套源码编到你自己的机型上。
 
-> **App 里每个开关是什么、该开还是该关、配错了会怎样 → 见下面 [App 界面全解](#app-界面全解配图)。**
-
----
-
-## App 界面全解（配图）
-
-Droidspaces App 里那个「编辑容器：root」页面，一共 6 个分区、20 多个开关。
-**大部分保持默认就行**，但有几个开关选错会让容器直接不能用，或者把手机文件暴露给容器。
-
-下面按页面顺序过一遍，每张图都是这台 PMB110 上的实际截图（v7.1.0）。
+> **App 里每个开关该开还是该关 → 见下面 [App 界面全解](#app-界面全解)，8 张图。**
 
 ---
 
-### 一、启动前的自检页（`Checking system requirements`）
+## App 界面全解
 
-点「启动」时先跑一次，输出分三档：
+<img src="assets/app-ui/01-general.jpg" width="300"> <img src="assets/app-ui/02-network.jpg" width="300">
 
-```
-[MUST HAVE]      缺一个就起不来
-[RECOMMENDED]    缺了能起，但功能不全
-[OPTIONAL]       只影响特定功能
-```
+<img src="assets/app-ui/03-hardware.jpg" width="300"> <img src="assets/app-ui/04-resources.jpg" width="300">
 
-你这台机器现在全是 ✓，但**哪些是真的、哪些是模块补的、哪些是假的**，必须分清：
+<img src="assets/app-ui/05-security.jpg" width="300"> <img src="assets/app-ui/06-advanced.jpg" width="300">
 
-| 项 | 输出 | 真相 |
-|---|---|---|
-| Root / Linux / Mount / UTS namespace | ✓ | 原厂就有 |
-| **PID namespace** | ✓ | **原厂没有**，`droid_lkm.ko` 补的。模块没加载这项会变 ✗ |
-| **IPC namespace** | ✓ | 同上，`droid_lkm.ko` 补的 |
-| pivot_root / /proc / /sys / Seccomp | ✓ | 原厂就有 |
-| **devtmpfs support** | ✓ | **原厂没有**，`droid_lkm_misc.ko` 注册的 |
-| Cgroup v2 / Cgroup namespace | ✓ | 原厂就有 |
-| **Macvlan / IPv6 NAT support** | ✓ | **原厂没有**，`net_macvlan` / `net_ip6nat` 补的 |
-| **Sandboxing (user namespaces)** | ✓ | ⚠️ **假的**。内核没编译 `CONFIG_USER_NS`，是模块让 `unshare()` 返回成功骗过了探测 |
+<img src="assets/app-ui/07-log-running.jpg" width="300"> <img src="assets/app-ui/08-log-restart.jpg" width="300">
 
-> 最后一条是这台机器最大的坑。它显示 ✓，App 日志里也会写 `Sandboxing: enabled`，
-> 但**容器里没有任何 user namespace**，容器 root 就是宿主 root。
-> 判定方法只有一条：看容器进程的 `/proc/<pid>/uid_map`，是不是 `0 0 4294967295`。
-> 详见本文开头那节「⚠️ 必读：`CONFIG_USER_NS` 补不了」。
-
----
-
-### 二、编辑容器页（6 个分区）
-
-#### 1. 一般设置
-
-<img src="assets/app-ui/01-general.jpg" width="420" alt="一般设置">
-
-只有一项「主机名」。留空就用容器名（这里是 `root`），容器里 `hostname` 显示的就是它。
-
-顶部那条红色提示 **「容器运行中 · 重启后生效」** 是最需要注意的：
-**在这个页面上改任何东西，都要 `停止 → 启动` 才生效**，热改不会应用。
-而且改完一定要点最底下的「保存更改」，否则退出就丢了。
-
-#### 2. 网络
-
-<img src="assets/app-ui/02-network.jpg" width="420" alt="网络">
-
-| 项 | 这台机器的值 | 建议 |
-|---|---|---|
-| 网络模式 | **主机**（`net_mode=host`） | **保持**。容器直接用宿主网络栈，里面起的服务立刻对局域网可见。改 bridge 需要 macvlan 链路配合，配错就是「容器没网」 |
-| 禁用 IPv6 | 关 | **保持关**。开了有概率让宿主上的 VPN 类 App 异常 |
-| DNS 服务器 | 空 | 留空，跟随宿主。容器里 DNS 坏了才填，比如 `223.5.5.5` |
-
-「主机」模式的代价：**没有网络隔离**。容器里的 nginx 监听 80，就是手机的 80，宿主的服务抢同一个端口会冲突。
-
-#### 3. 集成与硬件
-
-<img src="assets/app-ui/03-hardware.jpg" width="420" alt="集成与硬件">
-
-| 项 | 这台机器的值 | 建议 | 为什么 |
-|---|---|---|---|
-| **Android 存储** | **关** | **保持关** | 开了会把 `/storage/emulated/0`（相册、下载、微信文件）挂进容器。容器 root = 宿主 root，等于全部用户文件交给容器里的任何程序 |
-| 硬件访问 | 关 | **保持关** | 开了往容器 `/dev` 塞完整设备节点，配合容器里的 `CAP_MKNOD` 能碰块设备 |
-| **GPU 访问** | **开** | 按需 | 把 GPU 节点**镜像**进隔离的 `/dev`，不是完整直通。要跑 GPU 相关的东西才开 |
-| 配置 Termux:X11 | 灰（不可用） | 忽略 | 需要另外装 Termux 和 Termux:X11 两个 App |
-| Anland 显示 | 灰（不可用） | 忽略 | 要 Anland 5.x，不支持 6.x |
-| 配置 VirGL 3D 加速 | 关 | 保持关 | 软件 3D，性能不如直通，只在没有 GPU 访问时用 |
-| 配置 PulseAudio | 关 | 保持关 | 容器里要出声才开，多数服务端场景用不上 |
-
-#### 4. 资源限制
-
-<img src="assets/app-ui/04-resources.jpg" width="420" alt="资源限制">
-
-| 项 | 这台机器的值 | 说明 |
-|---|---|---|
-| 内存限制 | 开，**7.4 GB** / 上限 14.9 GB | 对应 `memory_limit`。拉到最右就是「不限」，容器吃满内存会触发系统杀进程 |
-| 允许交换空间 | 关 | 开了容器可以用 swap，手机上 swap 是 zram，意义不大 |
-| 限制 CPU | 开，**4 核** / 上限 8 核 | 对应 `cpu_quota=400000` / `cpu_period=100000`，即 4 个核的配额 |
-| 限制进程数 | 开，**1024** | 对应 `pids_limit`。跑 Docker + systemd 建议 ≥ 1024，留空=不限 |
-
-> 面板上看到的「内存 133MB / 7.7GB」是 cgroup 读数，**是容器自己的**；
-> 但 `df` 的磁盘占用和 `/proc/loadavg` 的负载**是整台手机的**，不随命名空间隔离，别被它吓到。
-
-#### 5. 安全与启动
-
-<img src="assets/app-ui/05-security.jpg" width="420" alt="安全与启动">
-
-这一块是**最容易配错**的：
-
-| 项 | 这台机器的值 | 建议 | 说明 |
-|---|---|---|---|
-| SELinux 宽容模式 | **开** | **保持开** | 关了容器里很多操作会被 SELinux 拒（`avc: denied`），apt、systemd 都可能失败 |
-| **允许沙箱** | **开** | **保持开** | 关了 App 会显示「允许沙箱不可用」。⚠️ 它只是让 App 把 `allow_sandboxing=1` 写进配置并做一次 `unshare` 探测，**不产生真正的 uid 隔离** |
-| 易失模式 | 关 | 保持关 | 仅内存模式，停止后容器内所有改动丢失 |
-| 强制 Cgroup V1 | 关 | 保持关 | 只有老镜像需要旧版层级 |
-| 特权模式 | 未配置 | **别动** | 点进去才知道具体内容。实测这台机器上进程本来就有 32 个 capability，这个开关不是「有没有特权」的开关 |
-| 开机自启 | **关** | **保持关**（当前） | 对应 `run_at_boot`。模块那边 `no_boot` 也是关的，两边必须对齐，否则每次开机白失败一次 |
-
-> ⚠️ **「转换容器属主」不要在 WebUI 里点。** 那个按钮是把 rootfs 里 52 万个文件改成 uid 200000，
-> 点一次容器立刻 `su: cannot set groups`，要跑 130 秒才能恢复。v1.0.20 已禁用，别绕过去。
-
-#### 6. 高级选项
-
-<img src="assets/app-ui/06-advanced.jpg" width="420" alt="高级选项">
-
-页面上有两块都叫「高级选项」，第一块三项和上面「安全与启动」重复（`强制 Cgroup V1` / `特权模式` / `开机自启`），**以点进去的实际值为准**，两处是同一个字段。
-
-| 项 | 建议 | 说明 |
-|---|---|---|
-| 环境变量 | 未配置 | 要传 `TZ`、`LANG`、代理才点进去加 |
-| **绑定挂载点** | 未配置 | ⚠️ 这里是**往容器里挂宿主目录**的地方。挂 `/sdcard`、`/data/media` 进去 = 把手机文件交给容器，和「Android 存储」开关同等风险 |
-| 指定 init 可执行文件路径 | 留空 | 留空用 `/sbin/init`（systemd）。要换成别的 init 才填 |
-
----
-
-### 三、日志页：三行字判断容器状态
-
-点「日志」弹出的窗口，**不用全看，只看 `Features` 那三行**。
-
-#### 正常运行
-
-<img src="assets/app-ui/07-log-running.jpg" width="420" alt="容器运行日志">
-
-```
-Container: root (RUNNING)
-  PID: 32302
-  OS : Ubuntu 22.04.5 LTS
-  Hostname: root
-
-Features:
-  Networking: host          ← 网络模式，跟配置页一致
-  HW access : GPU           ← 硬件访问，只镜像了 GPU 节点
-  SELinux   : Permissive    ← 宽容模式
-  Sandboxing: enabled       ← ⚠️ 只代表「允许沙箱」开着，不代表有 userns
-
-Resources:
-  Memory : 7.38 GB
-  Swap   : not allowed
-  CPU    : 4.00 cores
-  PIDs   : 1024
-
-[+] Container 'root' is running in background
-[+] Use 'su -c "droidspaces --name='root' enter"' to connect.
-```
-
-读法：
-
-| 行 | 正常值 | 异常时怎么办 |
-|---|---|---|
-| `(RUNNING)` | 运行中 | 显示 `STOPPED` = 没起来，往上翻日志找第一条报错 |
-| `PID` | 一个数字 | 没有 PID = 进程已退 |
-| `OS` | 你的发行版 | 显示不对 = rootfs 路径错了 |
-| `Networking` | `host` | 跟你配的不一致 = 配置没生效（改完没重启） |
-| `Sandboxing` | `enabled` | 显示 `disabled` = 「允许沙箱」被关了，App 会显示不可用 |
-| `Memory / CPU / PIDs` | 跟配置页一致 | 不一致 = 配置没保存或没重启 |
-
-#### 重启过程的日志
-
-<img src="assets/app-ui/08-log-restart.jpg" width="420" alt="重启日志">
-
-```
-Starting restart operation...
-[+] Restarting container root...
-[+] Stopping container 'root' (PID 25120)...
-[+] Waiting for graceful shutdown (this may take up to 15 seconds)...
-[+] Container 'root' stopped.
-
-Welcome to Droidspaces v7.1.0 !
-[+] Configuring host-side networking for root...
-[+] Applying Android system optimizations...
-[+] Container started with PID 32302 (Monitor...
-[+] Ensuring /data is mounted with suid supp...
-[+] Setting up GPU-only access...
-[+] Booting 'root' (init: /sbin/init)...
-```
-
-区分这几段：
-
-| 段 | 含义 |
-|---|---|
-| `Stopping ... Waiting for graceful shutdown` | 正常停容器，最多等 15 秒。**这里卡住超过 30 秒**说明容器里有进程不肯退（常见是 docker 里的容器没停） |
-| `Container 'root' stopped.` | 旧进程真的没了。**没有这一行就不要往下走**，否则新进程会和旧的抢同一个 rootfs |
-| `Configuring host-side networking` | 主机网络模式在做 iptables / 路由设置 |
-| `Setting up GPU-only access` | 只镜像 GPU 节点，不是完整直通 |
-| `Booting 'root' (init: /sbin/init)` | 开始跑容器里的 systemd，之后就该看到 `(RUNNING)` |
-
-**判断「这次启动成功了没」只看两行**：日志末尾有没有 `Container: root (RUNNING)` + `Command executed (exit code: 0)`。
-没有就是失败，往上找第一条 `[-]`。
-
----
-
-### 四、这张表存下来，配错了对照改
-
-| 开关 | 应该 | 配错的后果 |
-|---|---|---|
-| Android 存储 | **关** | 容器能删你相册、微信文件 |
-| 硬件访问 | **关** | 容器能碰块设备 |
-| 允许沙箱 | **开** | App 显示「不可用」，Docker 起不来 |
-| SELinux 宽容 | **开** | 容器内 apt/systemd 各种 permission denied |
-| 开机自启 | **关**（配 `no_boot`） | 每次开机白失败一次 |
-| 网络模式 | **主机** | 改 bridge 容易没网 |
-| 绑定挂载点 | **空** | 等于手动把宿主目录交出去 |
-| 内存 / CPU / PIDs | 按需，别拉满 | 拉满 = 容器能把手机吃死 |
-
-改完配置的正确顺序永远是：
-
-```sh
-# 1) App 里点「保存更改」
-# 2) 停容器
-su -c '/data/local/Droidspaces/bin/droidspaces --config=/data/local/Droidspaces/Containers/root/container.config stop'
-# 3) 确认配置真的写进文件了
-su -c 'grep -E "^(enable_android_storage|enable_hw_access|allow_sandboxing|run_at_boot)=" /data/local/Droidspaces/Containers/root/container.config'
-# 4) 再启动
-su -c '/data/local/Droidspaces/bin/droidspaces --config=/data/local/Droidspaces/Containers/root/container.config start 2>&1 | tail -5'
-```
-
-> App 界面有缓存：界面上看到的开关状态，**不一定**是 config 文件里的实际值。
-> 遇到「界面显示开、文件里是 0」的情况，以**文件**为准；这时候在 App 里点保存会把界面状态覆盖回去。
-
----
+`01 一般` · `02 网络` · `03 硬件` · `04 资源` · `05 安全` · `06 高级` · `07 运行日志` · `08 重启日志`
 
 ---
 
@@ -450,6 +235,9 @@ md5sum -c checksums.txt --ignore-missing
 | 建 `userns_adopt` 文件 | 同上，第二条崩溃路径 |
 | 卸载模块前不 stop 容器 | `vfs_open → try_module_get` UAF，可能 panic |
 | 相信 `max_user_namespaces` 有值 = 支持 userns | 残留节点，被骗三天 |
+| 开「Android 存储」/ 往「绑定挂载点」写 `/sdcard` | 容器 root = 宿主 root，等于把相册、微信文件交给容器里的任何程序 |
+| 开「硬件访问」 | 容器 `/dev` 拿到完整设备节点，配合 `CAP_MKNOD` 能碰块设备 |
+| 内存 / CPU / PIDs 全拉满 | 容器能把手机吃死；PIDs 建议 ≥ 1024 给 Docker 用 |
 
 ---
 
@@ -471,16 +259,72 @@ SELinux     ==  Permissive      （容器域 droidspacesd，只记日志不拦�
 
 ---
 
-## 构建
+## 自己构建：适配你的手机
 
-需要 DDK（Droidspaces Development Kit）环境：
+> 完整版（报错对照、自建 KDIR、崩机救援）→ **[教程 07](docs/tutorials/07-build-your-own.md)**。
+> 这里只给最短路径和**能不能做**的判断。
 
-```sh
-sh src/scripts/build-ddkk.sh android16-6.12     # 编译内核模块
-sh src/scripts/package-ksu-zip.sh out.zip       # 打 KernelSU 包
+### 先看边界：你的内核能拿到几个模块
+
+`droid_lkm/Makefile` 里 `DLKM_OPT` 只对 6.6 / 6.12 放行后三个模块：
+
+| 你的内核 | `droid_lkm.ko`（pid/ipc ns） | `vendor` / `misc` / `pids` |
+|---|---|---|
+| 6.12.x | ✅ 本机已验证 | ✅ |
+| 6.6.x | ⚠️ 能编，未验证 | ✅ 能编 |
+| 6.1 / 5.15 / 5.10 | ⚠️ 能编，未验证 | ❌ **不构建**，要自己改布局 |
+| 非 GKI / < 5.4 | ❌ | ❌ |
+
+编译环境必须是 **DDK 镜像**（内置匹配的 clang + KDIR），不能用系统 clang：
+
+```
+docker.cnb.cool/ylarod/ddk/ddk-min:android16-6.12       # tag = 你的 KMI
 ```
 
-产物生成在 `src/droid_lkm/out/`。
+> 为什么这么死：6.12 内核开了 KCFI，编译器版本对不上，`insmod` 不是报错，是 `CFI failure` + **整机断电**。
+
+### 五条命令
+
+```sh
+git clone https://github.com/ai-luo2006/droidspaces-6.12-pmb110.git
+cd droidspaces-6.12-pmb110/src
+
+sh scripts/fetch-deps.sh                    # 拉 4 个第三方工程（有离线快照）
+sh scripts/build-ddkk.sh android16-6.12     # ← 换成你的 KMI
+sh scripts/package-ksu-zip.sh               # → dist/Droidspaces-<version>.zip
+```
+
+产物在 `src/droid_lkm/out/<target>/`。可用 target：
+`android12-5.10` `android13-5.10` `android13-5.15` `android14-5.15` `android14-6.1` `android15-6.6` `android16-6.12` `android17-6.18`。
+
+### 三道锁要改成你的机器
+
+`src/dsm/post-fs-data.sh` 里硬编码了三处：
+
+| 位置 | 现在 | 改成 |
+|---|---|---|
+| 版本守卫 | `6.12.69-*` | 你的 `uname -r` 前缀 |
+| 机型守卫 | `*PMB110*` | 你的 `ro.product.device` |
+| vermagic 自检 | `vermagic=6.12` | 你的主版本 |
+
+不想改代码，用开关文件先试（`no_precheck` 会连 vermagic 一起跳过）：
+
+```sh
+su -c 'touch /data/adb/modules/Droidspaces/allow_any_kernel
+       touch /data/adb/modules/Droidspaces/no_precheck
+       echo "<你的代号>" > /data/adb/modules/Droidspaces/allow_list'
+```
+
+### 加载顺序：一块一块上
+
+```sh
+su -c 'insmod .../ko/droid_lkm.ko gate=0 mqueue=1 nspid=1 nspid_append=1 skip_sysvipc=0 no_fake_ns=0 skip_do_exit=0'
+su -c 'dmesg | grep -i droid_lkm | tail -30'
+```
+
+主模块不崩，再加 `vendor` → `misc` → `pids` → `macvlan` → `ip6table_nat`，每加一个看 `dmesg`。
+**调试期留着 `no_boot` 文件**，崩了重启还能进系统。`droid_lkm_misc.ko` 在非 6.12 内核上最容易崩，
+崩了就放弃它——只留主模块也能跑容器。
 
 ---
 
