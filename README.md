@@ -164,7 +164,11 @@ md5 应为 `75f679574e0347b46eead02789b405a7`。
 | `webui-index.html` | 75 KB | `75f679574e0347b46eead02789b405a7` | 状态页，防误点 |
 | `userns.sh` | 12 KB | `4c49905b36aeeac95460730762eb42f1` | 属主脚本（relabel 已加护栏） |
 | `fake_config.sh` | 1.8 KB | `2c5f89b7baed20a0544bd22064f43ade` | 见下方 ⚠️ |
-| `Droidspaces-6.12-src-v1.0.20.zip` | 710 KB | `8a60aef52cd7192ba71c6a6b8a969ae1` | 源码快照 |
+| `Droidspaces-6.12-src-v1.0.20.zip` | 710 KB | `8a60aef52cd7192ba71c6a6b8a969ae1` | 源码快照（ko 相同，文档以本仓库为准） |
+
+> 这些 zip 是**二进制交付物**，里面的 README / 教程是打包当天的快照。
+> 之后文档有更新（纯图界面章、教程 07 等）只改仓库里的 `README.md` 和 `docs/`，不重打包 ——
+> 重打包会改 md5，反而让 `checksums.txt` 对不上。看文档一律以仓库为准。
 
 ### 🟡 `release/v1.0.19/` — 可回退
 
