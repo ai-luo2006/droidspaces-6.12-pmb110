@@ -1,4 +1,4 @@
-> English version of [USAGE.md](../USAGE.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
+> English version of [USAGE.md](../../src/USAGE.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
 
 # Usage and Troubleshooting
 

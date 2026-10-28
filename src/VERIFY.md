@@ -178,7 +178,7 @@ su -c 'sed -i -e "/name=\"host_capabilities\"/d" \
 ## 9. pids 控制器（`droid_lkm_pids`）
 
 > 内核未编 `CONFIG_CGROUP_PIDS`，这是**模拟实现**。原理、记账点选择、已知偏差见
-> [`docs/PIDS-ENFORCEMENT.md`](docs/PIDS-ENFORCEMENT.md)。
+> [`docs/PIDS-ENFORCEMENT.md`](../docs/PIDS-ENFORCEMENT.md)。
 
 ### 9.1 加载后的探针自检
 

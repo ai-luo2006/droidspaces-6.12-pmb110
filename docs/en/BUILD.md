@@ -1,4 +1,4 @@
-> English version of [BUILD.md](../../BUILD.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
+> English version of [BUILD.md](../../src/BUILD.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
 
 # The Complete Build Flow from Source to .ko
 

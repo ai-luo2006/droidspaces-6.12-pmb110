@@ -1,4 +1,4 @@
-> English version of [README.md](../README.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
+> English version of [README.md](../../README.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
 
 # Droidspaces Kernel Module Suite (OnePlus Ace 6 Ultimate Edition / PMB110 / Android 16 / 6.12.69)
 
@@ -14,7 +14,7 @@ stock GKI kernel — `CONFIG_PID_NS` / `CONFIG_IPC_NS` / `CONFIG_SYSVIPC` / `CON
 > **On `CONFIG_USER_NS`**: this one **cannot** be backfilled. The stock kernel was built without it
 > (`unshare -U true` returns EINVAL, `/proc/<pid>/ns/user` does not exist). The module only performs
 > id translation at syscall boundaries, which is **not isolation** — container root is host root.
-> See the evidence chain at the end of [`CHANGELOG.md`](../CHANGELOG.md).
+> See the evidence chain at the end of [`CHANGELOG.md`](../../CHANGELOG.md).
 
 ---
 

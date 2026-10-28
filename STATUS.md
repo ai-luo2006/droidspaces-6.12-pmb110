@@ -170,7 +170,6 @@ uid=0(root) gid=0(root) ...
 | `su -c id` | ✅ 正常（历史问题 `cannot set groups` 已解决） |
 | `apt-get` | ✅ 可用 |
 | systemd | ✅ 正常（容器 init 就是 systemd） |
-| 宝塔面板 | ✅ 能跑起来 |
 
 ## 七、容器配置（`container.config`）
 

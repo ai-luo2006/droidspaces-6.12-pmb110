@@ -18,7 +18,7 @@ md5 与上表**逐字节一致**，构建可复现。
 
 `droid_lkm_pids.ko` 含 pids 显示层与功能层，可单独 `rmmod` / `insmod`；
 功能层的自检方式见
-[`../docs/PIDS-ENFORCEMENT.md`](../docs/PIDS-ENFORCEMENT.md#6-pidsstats自检计数器)
+[`../docs/PIDS-ENFORCEMENT.md`](../../docs/PIDS-ENFORCEMENT.md#6-pidsstats自检计数器)
 （`pids.stats` 里 `refused > 0` 即生效）。
 
 网络模块（macvlan / ip6table_nat）重新编译后 md5 会不同，
@@ -26,4 +26,4 @@ md5 与上表**逐字节一致**，构建可复现。
 导出符号表则完全一致。功能等价。
 
 > ⚠ 这批 ko **只在 PMB110 / 6.12.69 上真机验证过**。
-> 别的机型/内核请看 [`../docs/BUILD-FOR-OTHERS.md`](../docs/BUILD-FOR-OTHERS.md) 重新编译。
+> 别的机型/内核请看 [`../docs/BUILD-FOR-OTHERS.md`](../../docs/BUILD-FOR-OTHERS.md) 重新编译。

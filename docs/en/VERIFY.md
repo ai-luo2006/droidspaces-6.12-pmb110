@@ -1,4 +1,4 @@
-> English version of [VERIFY.md](../../VERIFY.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
+> English version of [VERIFY.md](../../src/VERIFY.md). Droidspaces 6.12 — v1.0.20-6.12 (author: ai-luo).
 
 # Post-Deployment Complete Verification Checklist
 

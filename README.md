@@ -73,13 +73,30 @@
 │   ├── dsm-pids/              pids 子模块
 │   ├── net_macvlan/ net_ip6nat/
 │   └── scripts/               构建与打包脚本
-├── docs/                      📖 文档
-│   ├── PRINCIPLE.md           原理（中）
-│   ├── en/                    英文版
-│   ├── TROUBLESHOOTING.md     ⭐ 踩坑记录，出问题先看这个
-│   └── HISTORY-userns-attempts-DEPRECATED.txt   失败路线的历史记录
-└── tools/                     独立小工具
+└── docs/                      📖 文档
+    ├── tutorials/             ⭐ 教程（从零到跑起来，6 篇）
+    ├── PRINCIPLE.md           原理（中）
+    ├── en/                    英文版
+    ├── TROUBLESHOOTING.md     ⭐ 踩坑记录，出问题先看这个
+    └── HISTORY-userns-attempts-DEPRECATED.txt   失败路线的历史记录
 ```
+
+---
+
+## 教程：从零到跑起来
+
+不想看原理、只想把东西用起来，直接进教程。每篇独立可看，命令能整段复制。
+
+| # | 教程 | 讲什么 | 时间 |
+|---|---|---|---|
+| 1 | [安装与首次验证](docs/tutorials/01-install.md) | 刷模块、点「加载」、确认六件事 | 10 分钟 |
+| 2 | [第一个容器](docs/tutorials/02-container.md) | 创建、启动、进入、配置项逐条解释 | 15 分钟 |
+| 3 | [装软件](docs/tutorials/03-software.md) | apt、nginx、redis、python、服务自启 | 20 分钟 |
+| 4 | [容器里跑 Docker](docs/tutorials/04-docker.md) | dockerd、镜像、端口、数据目录 | 20 分钟 |
+| 5 | [传文件与备份](docs/tutorials/05-files.md) | 宿主↔容器、打包、迁移、恢复 | 15 分钟 |
+| 6 | [升级 / 回退 / 卸载](docs/tutorials/06-maintenance.md) | 换版本、安全卸载、别踩的坑 | 10 分钟 |
+
+> 教程目录：[`docs/tutorials/`](docs/tutorials/README.md)。只有一加 Ace 6 至尊版（PMB110 / 6.12.69）适用，别的机型不要照抄。
 
 ---
 

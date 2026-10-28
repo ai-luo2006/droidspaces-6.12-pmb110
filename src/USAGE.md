@@ -104,7 +104,7 @@ docker run --rm --pids-limit 256 hello-world
 
 - 改完 limit 后**不要** `rmmod` 再 `insmod`：重载会清空 limit 表，
   需要重启容器让 Droidspaces 重新写 `pids.max`。
-- 原理与完整限制见 [`docs/PIDS-ENFORCEMENT.md`](docs/PIDS-ENFORCEMENT.md)。
+- 原理与完整限制见 [`docs/PIDS-ENFORCEMENT.md`](../docs/PIDS-ENFORCEMENT.md)。
 
 ---
 
