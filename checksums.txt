@@ -1,5 +1,5 @@
 # Droidspaces 6.12 v1.0.20 — 文件校验
-# 用法: cd repo && md5sum -c checksums.txt --ignore-missing
+# 用法: 在仓库根目录执行  md5sum -c checksums.txt --ignore-missing
 
 15fc08cbd67c06c3aa079bedd75b51bc  release/v1.0.20/droid_lkm_misc.ko
 8a60aef52cd7192ba71c6a6b8a969ae1  release/v1.0.20/Droidspaces-6.12-src-v1.0.20.zip
@@ -17,4 +17,3 @@ d686eb64c3514d1ec91c24e5e2e0956c  archive/Droidspaces-v1.0.11-6.12.zip
 a7a17bdf7c730f3693d2d4768175a93a  archive/Droidspaces-v1.0.16-6.12.zip
 90c04d42addf06158ff40735b8c36df5  archive/Droidspaces-v1.0.17-6.12.zip
 4f44e3e614ddbbc369ba56c1e4a65ef9  archive/Droidspaces-v1.0.18-6.12.zip
-7c25f13ab84eea89502d31919b910c09  archive/README.md

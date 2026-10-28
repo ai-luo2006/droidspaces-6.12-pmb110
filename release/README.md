@@ -101,8 +101,8 @@ md5     63c19b0fbdb25e56d9c62028e08170f0
 | 卸载前 | **先停容器**，否则可能 panic（见 `docs/TROUBLESHOOTING.md` ⑥） |
 | 不要 relabel | 本机无 userns，改了就是弄坏容器 |
 
-校验全部文件：
+校验全部文件（在**仓库根目录**执行，`checksums.txt` 里的路径是相对根的）：
 
 ```sh
-cd release && md5sum -c ../checksums.txt --ignore-missing
+md5sum -c checksums.txt --ignore-missing
 ```

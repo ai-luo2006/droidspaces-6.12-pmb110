@@ -152,6 +152,12 @@ v1.0.19 的页面会把"真 userns"显示成"已生效"、且「转换容器属�
 > v1.0.0 ~ v1.0.9 与早期调试包（`droidspaces_6.12_v3` ~ `v36`）未收录，
 > 那是开发过程中的临时构建，与当前结构不兼容。需要的话看 [`CHANGELOG.md`](CHANGELOG.md)。
 
+### 校验下载的文件
+
+```sh
+md5sum -c checksums.txt --ignore-missing
+```
+
 ### ⚠️ `fake_config.sh` 是双刃剑
 
 它把 `/proc/config.gz` 里的 `CONFIG_USER_NS` / `CONFIG_DEVTMPFS` 改成 `=y` 再 bind mount 覆盖，
