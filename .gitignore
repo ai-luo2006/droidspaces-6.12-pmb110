@@ -1,0 +1,23 @@
+# 编译产物
+*.o
+*.cmd
+*.mod
+*.mod.c
+*.symvers
+*.order
+*.ko
+!release/**/*.ko
+
+# 构建目录
+src/droid_lkm/out/
+src/dist/
+dist/
+out/
+build/
+
+# 编辑器 / 系统
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/

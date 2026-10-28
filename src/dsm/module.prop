@@ -1,0 +1,6 @@
+id=Droidspaces
+name=Droidspaces 6.12 (OnePlus PMB110)
+version=v1.0.20-6.12
+versionCode=10020
+author=ai-luo
+description=6 模块仅在 PMB110 / 6.12.69 真机验证过。WebUI: 状态/容器/日志，含每模块开关、卸载确认、机型与内核守卫、bootloop 守卫。默认不自动加载。

@@ -1,0 +1,6 @@
+id=DroidspacesPids
+name=Droidspaces PIDS (PMB110 / 6.12.69)
+version=v1.0.4-6.12
+versionCode=10004
+author=ai-luo
+description=只加载 droid_lkm_pids.ko：pids 显示层（Droidspaces 的 Process limit support 检查项变绿）+ 功能层（pids.max/pids.current/pids.stats，超限的 fork 返回 -EAGAIN，使 --pids-limit 真正生效）。不刷内核，可单独 rmmod，卸载即还原。仅在 PMB110 / 6.12.69 验证。

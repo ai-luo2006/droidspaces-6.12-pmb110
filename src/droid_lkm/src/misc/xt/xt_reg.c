@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2026 dere3046
+ */
+
+#include <linux/types.h>
+#include <linux/netfilter/x_tables.h>
+
+#include "misc.h"
+#include "xt_reg.h"
+#include "misc_proc.h"
+
+/*
+ * registration manifest, every ported match or target file exposes an init and exit pair and
+ * adds one line here
+ */
+struct droid_lkm_misc_xt_item {
+	const char *name;
+	int (*init)(void);
+	void (*exit)(void);
+};
+
+extern int droid_lkm_misc_xt_addrtype_init(void);
+extern void droid_lkm_misc_xt_addrtype_exit(void);
+
+static const struct droid_lkm_misc_xt_item droid_lkm_misc_xt_items[] = {
+	{ "addrtype", droid_lkm_misc_xt_addrtype_init, droid_lkm_misc_xt_addrtype_exit },
+};
+
+static unsigned int droid_lkm_misc_xt_registered;
+
+int droid_lkm_misc_xt_init(void)
+{
+	unsigned int i;
+	int ret;
+
+	for (i = 0; i < ARRAY_SIZE(droid_lkm_misc_xt_items); i++) {
+		ret = droid_lkm_misc_xt_items[i].init();
+		if (ret) {
+			droid_lkm_misc_err("xt %s failed: %d\n",
+				droid_lkm_misc_xt_items[i].name, ret);
+			droid_lkm_misc_xt_exit();
+			return ret;
+		}
+		droid_lkm_misc_xt_registered++;
+		droid_lkm_misc_info("xt registered: %s\n",
+			droid_lkm_misc_xt_items[i].name);
+	}
+
+	droid_lkm_misc_report("xt", droid_lkm_misc_xt_registered ? "ready" : "unsupported",
+			      droid_lkm_misc_xt_registered ?
+			      "xt_register_matches available" :
+			      "no match could be registered");
+
+	return 0;
+}
+
+void droid_lkm_misc_xt_exit(void)
+{
+	while (droid_lkm_misc_xt_registered) {
+		droid_lkm_misc_xt_registered--;
+		droid_lkm_misc_xt_items[droid_lkm_misc_xt_registered].exit();
+	}
+}
+
+unsigned int droid_lkm_misc_xt_count(void)
+{
+	return droid_lkm_misc_xt_registered;
+}

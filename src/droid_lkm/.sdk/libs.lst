@@ -1,0 +1,29 @@
+# <name> <git url> <rev> <desc>
+KallRecon https://github.com/Dere3046/KallRecon.git b258fb670f3f8878b18029167a2c1a15a71d51ad kernel symbol recovery
+Type_info https://github.com/Dere3046/Type_info.git 7182dae runtime struct layout via BTF
+hidemod https://github.com/Dere3046/hidemod.git 8e47dc8 hide module from module_list
+KernCall https://github.com/Dere3046/KernCall.git cdec722 syscall channel over ni_syscall
+rwMemory https://github.com/Dere3046/rwMemory.git d095dec cross process memory rw
+HooKern https://github.com/Dere3046/HooKern.git 7a02afa kernel hook toolbox
+MountHide https://github.com/Dere3046/MountHide.git 0cd7581 mount output hiding
+BlockDeviceHook https://github.com/Dere3046/BlockDeviceHook.git 224d8df block device protection
+rust_support https://github.com/Dere3046/RaanaSDK.git 8b52874 rust runtime provider
+atmm builtin - AT hardware address translation
+credroot builtin - cred replace privilege escalation
+hwbreakpoint builtin - hardware breakpoint debug
+hidedir builtin - proc directory hiding
+seccomp builtin - seccomp filter cache control
+kfile builtin - kernel file io with cred override
+mntns builtin - mount namespace enter
+selinuxhide builtin - selinux setprocattr spoof
+sepolicy builtin - selinux policy injection
+kevent builtin - kernel userspace event queue
+apksig builtin - apk v2 signature fingerprint
+pkgwatch builtin - package list watch and manager scan
+execshim builtin - exec path and env rewrite
+uiddb builtin - uid keyed record store
+selinuxid builtin - SELinux identity primitives
+pgtool builtin - page table read only inspection
+fdwrap builtin - cross domain fd bridge
+sulog builtin - su audit event payload
+vendorcompat builtin - vendor compatibility route layer

@@ -1,0 +1,311 @@
+[已废弃 / DEPRECATED]
+本文档写于 v0.6（2026-10-28 05:12），记录的是一次失败的尝试。
+结论已在 CHANGELOG.md / README.md / docs/PRINCIPLE.md 中改写：
+本机内核未编译 CONFIG_USER_NS（unshare -U 返回 EINVAL），
+"容器独立 uid / 真 userns 隔离" 无法实现，模块已放弃该方向。
+下文的所有方案、验证步骤、"已成功"结论均已作废，仅作历史记录保留。
+如果有人想接着做：先读 CHANGELOG.md 末尾的四条证据，别从本文开始。
+
+------------------------------------------------------------
+
+真 userns（uid 映射）第一版 —— 源码改动 + 编译/测试步骤
+============================================================
+
+一、这个包是什么
+----------------
+把「容器里的 uid 0 不是宿主 root」做成真的，纯 .ko，不刷内核。
+默认关闭（real_userns=0），打开了才生效，不改变你现在任何行为。
+
+
+二、怎么做的（一句话）
+----------------------
+不碰 from_kuid（它是 static inline 恒等，LKM 改不了），改成：
+  1) 真降权：容器进程 cred 里 uid/gid 真的就是 200000（ps、ls -l、磁盘 inode、
+     每一次 DAC 比较看到的都是 200000）
+  2) 边界翻译：在 getuid/setuid/chown 这些系统调用的进出口，把 200000 翻回 0、
+     把 0 翻成 200000；映射范围外的 id 一律 -EPERM
+
+
+三、改了哪些文件
+----------------
+新增
+  droid_lkm/src/misc/userns/userns_view.c     系统调用翻译层（4 读探针 + 12 写探针）
+
+修改
+  droid_lkm/src/misc/userns/userns.h          结构体加 real / uid_base / gid_base，加函数声明
+  droid_lkm/src/misc/userns/userns_map.c      新增 map_set()（真映射），自检加三组校验
+  droid_lkm/src/misc/userns/userns_core.c     每个 ns 分配 base（200000 起步，间隔 70000，8 槽）
+  droid_lkm/src/misc/userns/userns_cred.c     装 cred 时真降权到 base
+  droid_lkm/src/misc/userns/userns_hooks.c    安全闸门：非 root 且不在 ns 内的进程不给造 ns
+                                              （修掉「任何 App 都能 unshare -U 拿到满能力」）
+                                              修 capable_wrt_inode_uidgid 的查表方向 bug
+  droid_lkm/src/misc/misc_main.c              新增参数 real_userns / userns_any
+  droid_lkm/Makefile                          加 userns_view.o
+  dsm/post-fs-data.sh                         认 real_userns 标志文件，自动带参加载
+
+
+四、编译
+--------
+cd /workspace/oss && sh scripts/build-ddkk.sh android16-6.12
+产物：droid_lkm/out/android16-6.12/droid_lkm_misc.ko
+
+
+五、装到手机并测试
+------------------
+# 1) 换 ko（路径有 ko/ 子目录）
+su -c 'cp /sdcard/droid_lkm_misc.ko /data/adb/modules/Droidspaces/ko/'
+
+# 2) 两步卸载：devtmpfs 内部 mount 持着模块引用，直接 rmmod 一定 Try again
+su -c 'echo 1 > /sys/module/droid_lkm_misc/parameters/release; rmmod droid_lkm_misc'
+
+# 3) 打开真映射重载
+su -c 'insmod /data/adb/modules/Droidspaces/ko/droid_lkm_misc.ko real_userns=1'
+
+# 4) 造一个真命名空间（必须 root，新闸门只放 root 和容器内进程）
+su -c "unshare -U sh -c 'id; cat /proc/self/uid_map'"
+#   期望：uid=0(root) gid=0(root)
+#         uid_map = 0 200000 65536（也可能是 270000/340000，每次开新 ns 递增 70000）
+
+# 5) 宿主机看真实身份（另开一个 shell）
+su -c 'ps -o pid,uid,cmd -A | grep unshare'
+#   期望：那个进程 UID 是 200000（或 270000/340000），不是 0
+
+# 6) 反证：它不是宿主 root
+su -c "unshare -U sh -c 'touch /data/local/tmp/zz'"
+#   期望：Permission denied
+
+
+六、已知还没做的（下一批）
+--------------------------
+1. rootfs 要一次性 chown -R 200000，否则容器读不动根fs（这是 relabel 方案的成本，
+   真 userns 用 idmapped mount 免掉，LKM 里做不到）—— relabel 脚本下一步给
+2. ~~setgroups() 还没收口~~ v0.2 已收口：容器内 setgroups 一律 -EPERM
+3. ~~stat / ls -l 显示 200000~~ v0.2 已翻译 cp_new_stat / cp_statx，容器内 ls -l 显示 0
+4. getresuid/getresgid 要写用户指针，探针里做会缺页，暂未接
+5. 带 setuid 位、属主是 0 的二进制（如 bind 进容器的宿主 su）仍能抬 euid 到宿主 0
+
+
+七、回滚
+--------
+不加载即可：不上 real_userns=1 就是原来的恒等映射；或者
+su -c 'echo 1 > /sys/module/droid_lkm_misc/parameters/release; rmmod droid_lkm_misc'
+
+
+八、v0.2 这次改了什么（针对你上一轮实测）
+------------------------------------------
+你上一轮实测结果：uid_map 出来 0 270000 65536，ps 里真实 uid 270000 ——
+说明“降权 + 映射表”这一半是真的成了。两个问题：
+
+1) userns map selftest failed: 1 checks failed
+   不是代码错，是我自检的期望值写错：恒等映射 count=0xffffffff，覆盖范围是
+   0..4294967294，id 0xffffffff 本来就没有归属（上游也报 nobody）。已改正期望。
+
+2) 容器里 id 仍是 270000，没翻回 0
+   读方向原来用 kretprobe 挂在 __arm64_sys_getuid 上，而且被 real 开关挡住，
+   dmesg 里连一条 [lkmhook] 都没有 —— 也就是压根没装上。
+   现在改成和 pids 模块同一套（你机器上已验证有效的那套）：
+   kprobe 入口直接写 x0 + 跳回 LR，跳过函数体。
+
+   pids 里那段是：
+       regs->regs[0] = (unsigned long)(-EAGAIN);
+       hk_regs_return(regs);
+       return 1;
+   现在读 uid/gid 用的是同一手法，且**无条件安装**（不再看 real 开关）。
+
+   另外补了两处：
+   - cp_new_stat / cp_statx 入口改写 struct kstat 的 uid/gid
+     → 容器里 ls -l 看到的是 0，不是 270000（属主显示也修了）
+   - __arm64_sys_setgroups 在容器内一律 -EPERM（堵掉“补充组 0”那个口子）
+
+现在自检不用猜 dmesg，直接读状态文件：
+    su -c 'cat /proc/droid_lkm_misc/status | grep -i userns'
+    期望：userns view   armed   18 armed 0 missing real=1
+    （18 = 4 个读 + 12 个写 + vfs_getattr + setgroups）
+
+dmesg 里也应能看到：
+    [droid_lkm_misc] userns view: 20 armed, 0 unavailable, real=1
+    [droid_lkm_misc] userns view: live, raw 270000 reads as 0     ← 第一次翻译
+
+
+九、v0.3：你第二轮实测（已经成功，只剩两处收尾）
+----------------------------------------------
+实测结果：
+    uid=0(root) gid=0(root) groups=0(root)
+    0 270000 65536
+→ 真 userns 成立：容器里是 root，宿主上是 270000，映射表是真的。
+
+剩下两处：
+
+1) userns view  armed  18 armed 1 missing
+   缺的那个是 cp_new_stat 或 cp_statx 之一。查了 DDK 的 System.map：
+       cp_new_stat  t   ← 小写 t = 局部符号
+       cp_statx     t
+       vfs_getattr  T   ← 大写 T = 全局
+   局部符号只有在 CONFIG_KALLSYMS_ALL=y 时才进 kallsyms，你这台没进，所以挂不上。
+   改法：stat 的翻译整体挪到 vfs_getattr（arg1 就是 struct kstat *）。
+   它是导出的全局符号，而且 stat/lstat/fstat/fstatat/statx 全都经过它，
+   一个探针顶原来两个，还更稳。
+
+   顺手：状态行现在会写出缺谁，不再只报个数字：
+       userns view   degraded   17 armed, missing vfs_getattr
+
+2) userns selftest  failed  1 checks failed
+   这个是「三、端到端自检」那一层，不是 map 自检。它是在内核线程里
+   跑 unshare + mount tmpfs，而内核线程的 SELinux 域是 u:r:kernel:s0，
+   mount 很可能被 LSM 拒（EACCES），跟 namespace 本身没关系。
+
+   现在：
+   - 失败会写清是哪一步、errno 多少：  failed  1 failed: mount tmpfs in the namespace it owns (-13)
+   - EACCES 单列为「LSM 在 kernel 域拒绝」→ 不再算失败，状态显示
+     ready  3 layers, mount skipped by LSM
+   - 其它错误（比如 -EPERM，那才是能力真的不够）照样算失败
+
+十、v0.4 / 包 v1.0.8：真机通过，补齐可用的最后一块
+------------------------------------------------
+真机实测（你的输出，已通过）：
+
+    userns view       armed     18 armed 0 missing real=1
+    userns selftest   ready     3 layers, mount skipped by LSM
+    uid=0(root) gid=0(root) groups=0(root) context=u:r:ksu:s0
+             0     270000      65536
+    touch /data/local/tmp/a -> Permission denied
+
+前两行说明探针全挂、自检过；后三行说明容器里是 root、宿主上是 270000、
+写宿主目录被拒 —— 真隔离成立，不是显示骗术。
+
+这版修的是「能不能真用」：
+
+1) base 固定（关键）
+   原来每个新 namespace 递增 70000，容器一重启 base 就变，rootfs 文件
+   属主对不上，整棵树读不动。现在默认**所有 ns 共用 userns_base**（默认
+   200000），重启后不变。
+   真要每容器一段：insmod ... userns_spread=1（只有每次都重新 relabel
+   才正确，一般别开）。
+   新参数：userns_base=<uid>
+
+2) dsm/userns.sh（新文件）
+   status  模块状态 + 当前 base
+   list    列容器 + 属主状态（读 rootfs/.droid-userns-owner 标记）
+   check   只统计还差多少文件
+   relabel 把 root 拥有的文件改到 base（记录并恢复 setuid/setgid 位）
+   restore 改回 root（卸载模块前必须做）
+
+   relabel 的细节：
+   - 只改 -uid 0 / -gid 0 的文件，nobody/普通用户不动
+   - chown 会清 setuid/setgid，先 find -perm -4000/-2000 记下来再恢复
+   - 跑完复查 -uid 0 是否为 0，不是就不写标记（避免半成品）
+   - 容器正在跑（rootfs 在 /proc/mounts 里）就拒绝改
+
+3) WebUI 状态页新增「真 userns」卡片
+   - 开关：写/删 real_userns 意图文件（下次加载生效）
+   - 显示 host uid 基准（从 /proc/droid_lkm_misc/status 的 base= 读）
+   - 探针：18/18 真映射
+   - 按钮「转换容器属主」= userns.sh relabel all，超时放到 10 分钟
+
+4) post-fs-data.sh 支持 userns_base 文件
+   echo 300000 > /data/adb/modules/Droidspaces/userns_base
+
+5) uninstall.sh 提醒
+   检测到 .droid-userns-owner 就提示先 restore，否则卸载后原生 DS 读不动
+
+验证顺序（这轮这样做）：
+   su -c 'echo 1 > /sys/module/droid_lkm_misc/parameters/release; rmmod droid_lkm_misc'
+   su -c 'insmod /data/adb/modules/Droidspaces/ko/droid_lkm_misc.ko real_userns=1'
+   su -c 'cat /proc/droid_lkm_misc/status | grep -i "userns base"'
+   #   userns base  ready  base=200000 spread=0
+   su -c 'sh /data/adb/modules/Droidspaces/userns.sh relabel all'
+   #   然后启动容器，容器里 id 是 root，宿主 ps 是 200000
+
+已知边界（诚实清单）：
+   - getresuid/getresgid 未接（少见的调用路径，多数程序走 getuid）
+   - 容器外（宿主）看文件属主仍是 200000，只有容器内翻译成 0
+   - 容器内 setuid 程序只能提到容器 root（base），到不了宿主 0
+   - relabel 是一次性成本：十万级文件 1-3 分钟，rootfs 重建后要再做
+
+十一、包 v1.0.9：修两个“真机才能发现”的问题
+-------------------------------------------
+你这轮反馈：模块已经以 real_userns=1 加载、探针 18/18，但 WebUI 显示「未启用」。
+查下来两个都是真问题，不是你看错。
+
+1) WebUI「未启用」是显示 bug
+   WebUI 只看 real_userns 这个「意图文件」（决定下次加载带不带参数），
+   而你这次是手工 insmod real_userns=1 —— 文件不存在 → 落到 else → 显示未启用。
+   实际运行时 real=1，真映射是在跑的。
+
+   改法：
+   - 判定改成**以运行时为准**：/proc/droid_lkm_misc/status 里有 real=1 就是「已生效」
+   - 顺手自愈：发现「在跑真映射、但没有意图文件」时，自动补写 real_userns，
+     开关同步显示为开，并提示一次。这样重启后不会悄悄掉回恒等映射。
+
+2) relabel 只改 uid 0 是语义错误（更要紧）
+   映射是 0..65535 整段 → base..base+65535。容器里的 system(1000)、
+   app(1001)、普通用户 1000 全都在这一段里。
+   只改 uid 0 的结果：容器能启动，root 能读写，但**非 root 用户读自己的文件
+   就是 Permission denied** —— 会表现成“某个服务起不来、某个 App 报权限错误”。
+
+   改法：整段平移。实现细节有两个坑，都踩了：
+   a) 级联：先 0→1000，再把 1000→2000 —— 刚改出来的被当成源又改一次。
+      现在正向从大到小处理（倒序），改完的不再被捡到。
+      沙箱实测：0→1000、1001→2001、1002→2002，无级联。
+   b) 复查判据：原来查“还有 uid 0”，现在查“还有 uid < base”，
+      标记文件本身也改成 base:base，否则它自己会被判成没改完。
+
+   另外加了一条硬校验：base < 65536 直接拒绝（区间重叠就分不清改没改）。
+   沙箱里用 base=1000 + DS_ALLOW_SMALL_BASE=1 跑过全流程：
+      relabel → check 归零 → 再 relabel 自动跳过 → restore 完整还原 → setuid 保留
+
+3) 性能
+   先批量 stat 收出“出现过哪些 id”（几十个），再对每个 id 做一次
+   find -exec chown -h {} +，不逐文件 fork。十万级文件约 1-3 分钟。
+
+十二、包 v1.0.10：卸载立即关机（内核 panic）已定位并修复
+------------------------------------------------------
+真机 pstore 日志（console-ramoops-0）：
+
+    PC: 0xffffffe9cdb2f524          ← vfs_open+0xbc
+    Call trace:
+      vfs_open+0xbc/0x6a4
+      path_openat+0x5b0/0x1b04
+      do_sys_openat2 / __arm64_sys_openat
+    CPU: 5  PID: 24180  Comm: head
+    Tainted: P W O
+    do_translation_fault → do_mem_abort
+
+vfs_open 里读 inode 时页表翻译失败 = use-after-free。根因在三处：
+
+1) 致命：公开注册的 file_system_type 没有 .owner
+   droid_lkm_devtmpfs_type = { .name="devtmpfs", .mount=... }  ← 没有 owner
+   内核 get_fs_type() 靠 try_module_get(fs->owner) 拉住模块。owner 是 NULL
+   就等于不拉：容器挂过 devtmpfs 之后，super_block->s_type 仍指着模块内存，
+   而 rmmod 照样成功。模块一卸载，下一个 open 走到 vfs_open 读 inode 就崩。
+   → 加上 .owner = THIS_MODULE。此后只要还有 sb 活着，rmmod 必然 EBUSY，
+     崩溃变成「卸载不掉」，这是唯一能保证安全的做法。
+
+2) release 顺序反了
+   原来：unregister_filesystem() → kern_unmount()
+   现在：kern_unmount() → unregister_filesystem() → synchronize_rcu()
+   先让 sb 有机会死掉，再摘 type；最后等 RCU 读侧走完。
+
+3) 热路径探针没有在 rmmod 前撤离
+   getuid 是全系统最热的 syscall。release=1 现在会先 droid_lkm_userns_view_exit()
+   把 18 个探针撤掉（模块还映射着，撤是安全的），再处理 devtmpfs。
+   view_exit/init 都加了幂等守卫，重复调用不会二次 unregister_kprobe。
+   release=0 恢复时探针会重新装回去。
+
+另外：卸载时不再无条件 kfree 命名空间对象。ns.count > 1 说明还有 task 的
+cred 指着它，直接 free 会让 cred->user_ns 悬空，下一次 ns_capable 就是 UAF。
+现在这种对象保留不释放（漏一点内存），并打警告。
+
+「没加载却显示 已加载 6/6」的原因（另一个 bug）：
+  post-fs-data.sh 第 39 行 no_boot → exit 0，而 desc.sh 在第 251 行才调用。
+  no_boot 模式永远跑不到，崩溃后残留的描述就一直留着。
+  → 把 desc.sh 提到 BOOT 判断之前，无条件执行一次。每次开机按 /proc/modules
+    的真实情况重写，崩过的描述不会再骗人。
+
+验证顺序（分两步，先排除容器因素）：
+  1) 加载模块，不启动任何容器
+     su -c 'echo 1 > /sys/module/droid_lkm_misc/parameters/release; sleep 1; rmmod droid_lkm_misc'
+     → 应该干净返回，不重启
+  2) 加载模块，启动一个容器，停掉容器，再卸载
+     → 若报 Try again / Resource busy，说明容器仍握着 devtmpfs（新的 owner
+       在起作用），停干净容器再卸；若这时直接重启，说明还有别的引用，报我

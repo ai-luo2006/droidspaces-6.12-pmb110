@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" id="schemeMeta" content="dark light">
+<meta name="theme-color" id="themeColor" content="#0a0c11">
+<script>
+  /* 解析期就定好主题色与 color-scheme：KernelSU 管理器在「页面提交」那一刻一次性读
+     theme-color 决定状态栏底色（很多版本只在加载时读这一次），所以必须赶在首帧渲染前
+     设好，不能等下面的 JS 跑完再改——那时状态栏已经按默认值画成白条了。
+     data-theme 也同步设好，避免浅色系统下首屏先闪一下深色。 */
+  (function(){
+    try{
+      var t = localStorage.getItem("ds_theme") || "auto";
+      var dark = (t === "dark") ||
+                 (t === "auto" && window.matchMedia &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches);
+      var bg = dark ? "#0a0c11" : "#ffffff";
+      var m = document.getElementById("themeColor"); if(m) m.setAttribute("content", bg);
+      var s = document.getElementById("schemeMeta");
+      if(s) s.setAttribute("content", dark ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    }catch(e){}
+  })();
+</script>
+<title>Droidspaces 6.12</title>
+<style>
+  :root{--bg:#0a0c11;--bg2:#0f131b;--card:#151a23;--card2:#1b212c;--line:#252d3b;
+    --fg:#e9eef7;--dim:#8894a8;--dim2:#5d6879;--accent:#4c8dff;--accent2:#8b5cff;
+    --ok:#25e0a2;--bad:#ff6b6b;--warn:#ffb648;--shadow:0 8px 28px rgba(0,0,0,.38);--field:#0f141c;
+    color-scheme:dark light}
+  /* 浅色主题底色用纯白：KernelSU 的 WebView 顶栏是原生白条，网页这侧只能把
+     背景做成同色才不出现色差。卡片与背景同为 #fff，层次靠 --line 描边和二级块 --card2 拉开。 */
+  @media (prefers-color-scheme:light){
+    :root{--bg:#ffffff;--bg2:#ffffff;--card:#ffffff;--card2:#f5f7fb;--line:#e6eaf2;
+      --fg:#10151d;--dim:#5f6c80;--dim2:#93a0b3;--accent:#2f6bed;--accent2:#7a4cff;
+      --ok:#0a9d68;--bad:#d93a3a;--warn:#c47b00;--shadow:0 6px 22px rgba(21,38,72,.08);--field:#f2f5fa}}
+  /* color-scheme 决定 WebView 画布与系统栏的默认底色。不加这一句时，
+     系统为浅色而页面强制深色，画布底仍是白的，状态栏区域就会露出白条。 */
+  html[data-theme="dark"]{--bg:#0a0c11;--bg2:#0f131b;--card:#151a23;--card2:#1b212c;--line:#252d3b;
+    --fg:#e9eef7;--dim:#8894a8;--dim2:#5d6879;--accent:#4c8dff;--accent2:#8b5cff;
+    --ok:#25e0a2;--bad:#ff6b6b;--warn:#ffb648;--shadow:0 8px 28px rgba(0,0,0,.38);--field:#0f141c;
+    color-scheme:dark}
+  html[data-theme="light"]{--bg:#ffffff;--bg2:#ffffff;--card:#ffffff;--card2:#f5f7fb;--line:#e6eaf2;
+    --fg:#10151d;--dim:#5f6c80;--dim2:#93a0b3;--accent:#2f6bed;--accent2:#7a4cff;
+    --ok:#0a9d68;--bad:#d93a3a;--warn:#c47b00;--shadow:0 6px 22px rgba(21,38,72,.08);--field:#f2f5fa;
+    color-scheme:light}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  /* 根元素也要有背景色：沉浸式状态栏/overscroll 区域取的是它，否则会露出 WebView 默认白底 */
+  html{background:var(--bg);background-color:var(--bg);-webkit-text-size-adjust:100%}
+  body{background:var(--bg);background-color:var(--bg);
+    color:var(--fg);min-height:100vh;min-height:100dvh;overflow-x:hidden;
+    font:15px/1.5 -apple-system,Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    padding:calc(14px + env(safe-area-inset-top, 0px)) calc(15px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(15px + env(safe-area-inset-left, 0px));
+    max-width:560px;margin:0 auto;
+      transition:background .25s,color .25s}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:radial-gradient(120% 60% at 50% 0%,rgba(76,141,255,.16),transparent 62%),
+      linear-gradient(180deg,var(--bg2),var(--bg) 38%)}
+  header{display:flex;align-items:center;gap:10px;margin:0 0 12px;min-width:0;padding-top:2px}
+  header>div:nth-child(2){min-width:0;flex:1 1 auto}
+  .logo{width:38px;height:38px;border-radius:12px;flex:0 0 auto;display:grid;place-items:center;font-size:18px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 6px 16px rgba(76,141,255,.32)}
+  h1{font-size:16.5px;margin:0;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{color:var(--dim);font-size:11.5px;margin-top:1px;overflow-wrap:anywhere;word-break:break-all}
+  .vtag{display:inline-block;font-size:10px;font-weight:600;letter-spacing:0;color:var(--accent);
+    background:rgba(76,141,255,.14);padding:2px 7px;border-radius:6px;vertical-align:2px}
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;background:var(--card);
+    border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:13px;box-shadow:var(--shadow)}
+  .tab{border:none;background:transparent;color:var(--dim);border-radius:10px;padding:9px 4px;
+    font-size:13.5px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px}
+  .tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
+    box-shadow:0 4px 14px rgba(76,141,255,.30)}
+  .page{display:none}
+  .page.active{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
+    border-radius:16px;padding:3px 14px;margin-bottom:11px;box-shadow:var(--shadow)}
+  .card-title{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:var(--dim2);
+    padding:12px 0 6px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .card-title span.tag{font-size:10px;letter-spacing:0;text-transform:none;padding:2px 7px;border-radius:6px;
+    background:rgba(76,141,255,.14);color:var(--accent);font-weight:600}
+  .row{display:flex;align-items:center;gap:11px;padding:10px 0;font-size:13.8px;border-top:1px solid var(--line)}
+  .card-title + .row{border-top:none}
+  .k{color:var(--fg);opacity:.92;min-width:0;flex:1 1 auto;overflow-wrap:anywhere}
+  .k small{display:block;color:var(--dim2);font-size:11px;margin-top:1px;font-weight:400;line-height:1.4}
+  .v{margin-left:auto;text-align:right;color:var(--dim);font-size:12px;word-break:break-all;
+    overflow-wrap:anywhere;max-width:56%}
+  .badge{margin-left:auto;font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+    color:var(--dim);background:var(--card2);white-space:nowrap}
+  .badge.on{color:var(--ok);border-color:rgba(37,224,162,.45);background:rgba(37,224,162,.10)}
+  .badge.off{color:var(--bad);border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.09)}
+  .badge.warn{color:var(--warn);border-color:rgba(255,182,72,.4);background:rgba(255,182,72,.09)}
+  .switch{position:relative;width:46px;height:27px;flex:0 0 auto;margin-left:auto}
+  .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;z-index:2}
+  .sl{position:absolute;inset:0;background:#2a3242;border-radius:999px;transition:background .22s}
+  .sl::after{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;border-radius:50%;
+    background:#fff;transition:transform .22s cubic-bezier(.3,1.4,.5,1);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+  .switch input:checked + .sl{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .switch input:checked + .sl::after{transform:translateX(19px)}
+  html[data-theme="light"] .sl{background:#cfd7e5}
+  @media (prefers-color-scheme:light){html:not([data-theme="dark"]) .sl{background:#cfd7e5}}
+  .delaybox{display:flex;gap:6px;align-items:center;margin-left:auto}
+  input[type=number]{width:70px;padding:7px 9px;border-radius:9px;border:1px solid var(--line);
+    background:var(--field);color:var(--fg);font-size:13px;text-align:center;font-family:inherit}
+  select{padding:7px;border-radius:9px;border:1px solid var(--line);background:var(--field);
+    color:var(--fg);font-size:13px;font-family:inherit;max-width:150px}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .dimrow{opacity:.4;pointer-events:none}
+  .grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:7px;padding:7px 0 9px}
+  .cell{background:var(--field);border:1px solid var(--line);border-radius:11px;
+    padding:8px 9px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;min-width:0}
+  .cell b{font-size:11.5px;font-weight:600;color:var(--dim);letter-spacing:.2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .cell .badge{margin:0;font-size:10.5px;padding:2px 8px}
+  .btnrow{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}
+  .btnrow button{padding:10px 6px;font-size:12.5px;border-radius:11px}
+  .btnrow button.primary{grid-column:auto}
+  .btnrow button.wide{grid-column:1/-1}
+  .mask{position:fixed;inset:0;background:rgba(6,9,14,.72);
+    display:none;align-items:center;justify-content:center;padding:16px;z-index:120}
+  .mask.show{display:flex}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:18px;width:100%;
+    max-width:430px;max-height:84vh;overflow:auto;padding:16px 16px 14px;box-shadow:0 20px 50px rgba(0,0,0,.5);
+    animation:pop .18s ease}
+  @keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+  .modal h3{margin:0 0 4px;font-size:16px}
+  .note{font-size:11.5px;color:var(--dim);line-height:1.65;background:var(--field);
+    border:1px solid var(--line);border-radius:11px;padding:10px 11px;margin:9px 0 4px}
+  .note b{color:var(--fg);opacity:.92}
+  .urow{display:flex;align-items:center;gap:9px;padding:10px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .urow:first-of-type{border-top:none}
+  .urow .k{flex:1 1 auto;min-width:0}
+  .urow .k small{display:block;color:var(--dim2);font-size:11px;margin-top:1px}
+  .urow button{padding:7px 12px;font-size:12px;border-radius:9px;flex:0 0 auto;font-weight:500}
+  .urow button:disabled{opacity:.32}
+  /* 被硬护栏禁掉的按钮必须有可见反馈，否则看着能点、点了没反应 */
+  .actions button:disabled{opacity:.35;cursor:not-allowed}
+  .switch input:disabled + .sl{opacity:.35;cursor:not-allowed}
+  .msg{font-size:11.5px;margin:8px 0 2px;min-height:14px;line-height:1.5;word-break:break-word}
+  .msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+  .mfoot{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .ctr{border-top:1px solid var(--line)}
+  .ctr:first-child{border-top:none}
+  .ctr .row{border-top:none;padding:7px 0}
+  .mini{display:flex;gap:6px;padding:0 0 11px;flex-wrap:wrap}
+  .mini button{padding:7px 12px;font-size:12px;border-radius:9px;background:var(--card2);
+    border:1px solid var(--line);color:var(--fg);font-weight:500}
+  .seg{display:flex;gap:3px;margin-left:auto;background:var(--field);border:1px solid var(--line);
+    border-radius:10px;padding:3px}
+  .seg button{border:none;background:transparent;color:var(--dim);padding:6px 12px;border-radius:8px;
+    font-size:12.5px;font-weight:500;font-family:inherit}
+  .seg button.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 10px}
+  button{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--fg);
+    border-radius:13px;padding:12px 10px;font-size:13.2px;font-weight:500;
+    display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;
+    transition:transform .12s,opacity .12s}
+  button:active{transform:scale(.975);opacity:.82}
+  button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;
+    color:#fff;grid-column:1/-1;box-shadow:0 7px 20px rgba(76,141,255,.30)}
+  button.ghost{background:transparent}
+  button.danger{color:var(--bad)}
+  button.wide{grid-column:1/-1}
+  button.primary.dimmed{opacity:.45;filter:grayscale(.55)}
+  .ico{font-size:14px;line-height:1}
+  /* 图标统一为线性 SVG：emoji 在各 WebView 上字形不一致，深浅色下也不跟当前色 */
+  .ic{width:15px;height:15px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .tab .ic{width:14px;height:14px}
+  .mini .ic{width:13px;height:13px}
+  .logo-ic{width:21px;height:21px;fill:none;stroke:#fff;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+  /* 状态栏安全区：沉浸式时这一条归网页画。不填色就会露出 WebView 的白底，
+     也就是深色主题下顶部那条白条。用 --bg2 是为了和 body::before 渐变起点同色。 */
+  .topbar{position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);
+    background:var(--bg);z-index:90;pointer-events:none}
+  pre{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin:0;
+    font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;
+    max-height:46vh;overflow:auto;color:var(--dim);box-shadow:var(--shadow)}
+  .hint{color:var(--dim2);font-size:10.5px;margin:8px 2px 0;line-height:1.55}
+  .hint b{color:var(--fg);font-weight:600}
+  .hint.alert{color:var(--warn);border-left:2px solid var(--warn);padding-left:7px;background:rgba(255,182,72,.07);border-radius:0 6px 6px 0}
+  .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
+    transform:translate(-50%,16px);opacity:0;pointer-events:none;background:rgba(20,26,36,.95);color:#fff;
+    border:1px solid var(--line);padding:9px 17px;border-radius:999px;font-size:12.5px;transition:.24s;
+    /* 必须高于 .mask(120)：卸载弹窗里点按钮后的 toast 原来会被弹窗盖住 */
+    backdrop-filter:blur(10px);z-index:200;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div class="topbar" aria-hidden="true"></div>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7.5 12 3l9 4.5v9L12 21 3 16.5v-9z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-ctr" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.6"/><rect x="3" y="14" width="18" height="6" rx="1.6"/><path d="M7 7h.01M7 17h.01"/></symbol>
+<symbol id="i-log" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+<symbol id="i-eject" viewBox="0 0 24 24"><path d="M12 3 3 13h18L12 3z"/><rect x="4" y="16" width="16" height="3" rx="1.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></symbol>
+<symbol id="i-signal" viewBox="0 0 24 24"><path d="M5 13a9 9 0 0 1 14 0"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></symbol>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.6"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3z"/><path d="M9.5 12l2 2 3.5-3.5"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-steth" viewBox="0 0 24 24"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v2a4 4 0 0 0 8 0v-1"/><circle cx="18" cy="10" r="2"/></symbol>
+</svg>
+
+<header>
+  <div class="logo"><svg class="logo-ic" viewBox="0 0 24 24"><use href="#i-box" xlink:href="#i-box"/></svg></div>
+  <div>
+    <h1>Droidspaces 6.12 <span class="vtag" id="ver">–</span></h1>
+    <div class="sub" id="kern">读取中…</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="status" onclick="goTab('status')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-check" xlink:href="#i-check"/></svg>检测</button>
+  <button class="tab" data-tab="ctr" onclick="goTab('ctr')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-ctr" xlink:href="#i-ctr"/></svg>容器</button>
+  <button class="tab" data-tab="log" onclick="goTab('log')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-log" xlink:href="#i-log"/></svg>日志</button>
+</nav>
+
+<section class="page active" id="page-status">
+  <div class="card">
+    <div class="card-title">模块状态<span class="badge" id="pill">检测中</span></div>
+    <div class="grid3">
+      <div class="cell"><b>droid_lkm</b><span class="badge" id="s1">–</span></div>
+      <div class="cell"><b>vendor</b><span class="badge" id="s2">–</span></div>
+      <div class="cell"><b>misc</b><span class="badge" id="s3">–</span></div>
+      <div class="cell"><b>pids</b><span class="badge" id="s4">–</span></div>
+      <div class="cell"><b>devtmpfs</b><span class="badge" id="s8">–</span></div>
+      <div class="cell"><b>macvlan</b><span class="badge" id="s9">–</span></div>
+      <div class="cell"><b>ip6nat</b><span class="badge" id="s10">–</span></div>
+    </div>
+    <div class="row"><span class="k">模块说明<small>KernelSU 模块列表里显示的就是这一行</small></span><span class="v" id="desc" style="text-align:left;max-width:70%;line-height:1.45">–</span></div>
+    <div class="row"><span class="k">容器 uid_map<small>读容器进程的映射，才是 userns 是否真的生效</small></span><span class="badge" id="s5">–</span></div>
+    <div class="row"><span class="k">容器 ns<small>容器 init 进程实际持有的 namespace</small></span><span class="v" id="nsC">–</span></div>
+    <div class="row"><span class="k">网页 shell ns<small>WebUI 自己所在的环境，不代表容器</small></span><span class="v" id="ns">–</span></div>
+  </div>
+
+  <div class="btnrow">
+    <button class="primary" id="loadBtn" onclick="doLoad()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-bolt" xlink:href="#i-bolt"/></svg>加载</button>
+    <button onclick="doStatus()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-refresh" xlink:href="#i-refresh"/></svg>刷新</button>
+    <button class="ghost danger" onclick="openUnload()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-eject" xlink:href="#i-eject"/></svg>卸载</button>
+  </div>
+  <div class="hint" id="loadHint" style="margin:-4px 2px 10px">「加载」按下方「加载内容」开关执行，只装尚未加载的。想真正重载：先「卸载」再点「加载」。</div>
+
+  <div class="card">
+    <div class="card-title">开机行为<span class="tag">重启后生效</span></div>
+    <div class="row">
+      <span class="k">开机自动加载<small>关闭后开机不碰内核，只用按钮手动加载</small></span>
+      <label class="switch"><input type="checkbox" id="t_boot"><span class="sl"></span></label>
+    </div>
+    <div class="row" id="rowDelay">
+      <span class="k">延迟加载<small>仅开机生效，手动点「加载」立即执行</small></span>
+      <label class="switch"><input type="checkbox" id="t_delay"><span class="sl"></span></label>
+    </div>
+    <div class="row" id="delayRow">
+      <span class="k">延迟时长<small>上限 600 秒</small></span>
+      <span class="delaybox">
+        <input type="number" id="delayNum" min="0" max="600" inputmode="numeric" value="30">
+        <select id="delayUnit">
+          <option value="1">秒</option><option value="60">分</option><option value="3600">时</option>
+        </select>
+      </span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">加载内容<span class="tag">只影响装入</span></div>
+    <div class="row">
+      <span class="k">droid_lkm<small>PID / IPC / mqueue · Docker 靠它</small></span>
+      <label class="switch"><input type="checkbox" id="t_lkm"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">vendor<small>oplus 厂商兼容层</small></span>
+      <label class="switch"><input type="checkbox" id="t_ven"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">misc<small>userns 命名空间 + devtmpfs 设备节点</small></span>
+      <label class="switch"><input type="checkbox" id="t_misc"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">pids<small>pids 控制器 · 让 --pids-limit 真正生效 · 可单独装卸</small></span>
+      <label class="switch"><input type="checkbox" id="t_pids"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">macvlan<small>容器独立 IP · 地址由模块自己解析</small></span>
+      <label class="switch"><input type="checkbox" id="t_mv"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">ip6table_nat<small>IPv6 NAT · 地址由模块自己解析</small></span>
+      <label class="switch"><input type="checkbox" id="t_n6"><span class="sl"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">安全</div>
+    <div class="row">
+      <span class="k">加载前自检<small>校验文件与 vermagic，不匹配就不加载</small></span>
+      <label class="switch"><input type="checkbox" id="t_pre"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">bootloop 守卫<small>崩在 insmod，或加载后没撑过 2 分钟 → 自动拦截</small></span>
+      <span class="badge" id="s6">–</span>
+    </div>
+    <div class="row">
+      <span class="k">机型 / 内核锁<small>默认只放行 PMB110 + 6.12.69-*</small></span>
+      <span class="badge" id="s7">–</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">真 userns<span class="tag">UID 隔离</span><span class="badge" id="uState">–</span></div>
+    <div class="row">
+      <span class="k">容器独立 uid<small>容器里的 uid 0 在宿主上是 <b id="uBase">–</b>，不再是宿主 root</small></span>
+      <label class="switch"><input type="checkbox" id="t_ureal" disabled><span class="sl"></span></label>
+    </div>
+    <div class="row"><span class="k">探针<small>getuid / setuid / stat 属主 / setgroups 的翻译是否挂上</small></span><span class="v" id="uProbe" style="font-size:12px;white-space:nowrap">–</span></div>
+    <div class="actions">
+      <button onclick="doRelabel()" id="relabelBtn" disabled title="容器不在 user namespace 里时禁用"><svg class="ic" viewBox="0 0 24 24"><use href="#i-swap" xlink:href="#i-swap"/></svg>转换容器属主</button>
+      <button class="ghost" onclick="doUsernsInfo()">查看详情</button>
+    </div>
+    <div class="hint" id="uHint">本机内核未启用 <b>CONFIG_USER_NS</b>，容器拿不到真实的 user namespace，「容器独立 uid」在这台机器上不成立：容器进程就是宿主 root，只能在 mount namespace + 独立 rootfs 里被隔离。模块的 id 翻译钩子能挂上，但造不出命名空间，所以这里显示「未生效」。<br>「转换容器属主」因此被禁用：现在点它只会把 rootfs 改成 <b id="uBase2">–</b>，而进程仍然是 0，容器随后读不动自己的文件（<code>su: cannot set groups</code>），还要再花几分钟还原。</div>
+  </div>
+
+  <div class="hint">首次安装会自动关闭「开机自动加载」。建议先点上方「加载」验证手机正常，再回来打开它。</div>
+
+  <div class="card">
+    <div class="card-title">外观</div>
+    <div class="row">
+      <span class="k">主题<small>深色 / 浅色 / 跟随系统</small></span>
+      <div class="seg" id="themeSeg">
+        <button data-t="auto">自动</button>
+        <button data-t="light">浅色</button>
+        <button data-t="dark">深色</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="page" id="page-ctr">
+  <div class="card">
+    <div class="card-title">容器网络与软件源<span class="tag">改 rootfs</span></div>
+    <div class="row"><span class="k">检测到的容器<small>换源/优化会处理全部，不只第一个</small></span><span class="badge" id="ctrN">–</span></div>
+    <div class="row"><span class="k">当前软件源</span><span class="v" id="curSrc">–</span></div>
+    <div class="row"><span class="k">镜像站<small>选完后需点「一键换源」才写入</small></span>
+      <select id="mirSel">
+        <option value="auto">自动测速</option>
+        <option value="ustc">中科大 USTC</option>
+        <option value="tuna">清华 TUNA</option>
+        <option value="ali">阿里云</option>
+        <option value="huawei">华为云</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" onclick="doMirror('mirror')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-swap" xlink:href="#i-swap"/></svg>一键换源（apt + pip + npm）</button>
+    <button onclick="doMirror('dns')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-signal" xlink:href="#i-signal"/></svg>网络优化</button>
+    <button onclick="loadCtr()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-refresh" xlink:href="#i-refresh"/></svg>刷新列表</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">容器列表</div>
+    <div id="ctrList" style="padding-bottom:10px;color:var(--dim);font-size:12.5px">读取中…</div>
+  </div>
+  <div class="hint">「网络优化」= DNS(223.5.5.5) + IPv4 优先 + apt 加速。DNS 会被 Droidspaces 启动覆盖，正路是在它的「编辑容器 → DNS 服务器」填 223.5.5.5,119.29.29.29。</div>
+</section>
+
+<section class="page" id="page-log">
+  <div class="card">
+    <div class="card-title">日志设置</div>
+    <div class="row">
+      <span class="k">记录日志<small>关闭后不再写 load.log / history.log（加载仍照常进行）</small></span>
+      <label class="switch"><input type="checkbox" id="t_log"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <span class="k">日志大小<small>load.log 超 256KB 自动截断</small></span>
+      <span class="badge" id="logSize">–</span>
+    </div>
+  </div>
+
+  <div class="btnrow" style="margin-top:0">
+    <button class="primary" onclick="doLog()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-refresh" xlink:href="#i-refresh"/></svg>刷新</button>
+    <button onclick="doDmesg()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-chip" xlink:href="#i-chip"/></svg>内核</button>
+    <button onclick="doHistory()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-history" xlink:href="#i-history"/></svg>历史</button>
+    <button class="ghost" onclick="doExport()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-download" xlink:href="#i-download"/></svg>导出</button>
+    <button class="ghost" onclick="doRecover()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" xlink:href="#i-shield"/></svg>解阻断</button>
+    <button class="ghost danger" onclick="doClearLog()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" xlink:href="#i-trash"/></svg>清空</button>
+    <button class="ghost wide" onclick="doDiag()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-steth" xlink:href="#i-steth"/></svg>一键诊断（打包环境信息）</button>
+  </div>
+  <pre id="log">点「刷新」…</pre>
+</section>
+
+<div class="mask" id="mask" onclick="if(event.target===this)closeUnload()">
+  <div class="modal">
+    <h3>卸载内核模块</h3>
+    <div class="note">
+      <b>「卸载」= 把模块从内存里移除（rmmod），不会删除任何文件。</b><br>
+      .ko 文件仍然在模块目录里，随时可以再点「加载」装回去。<br><br>
+      · 未加载的模块显示「未加载」，按钮不可点（点了也只会报 not loaded，没有副作用）；<br>
+      · 如果 Docker 容器或 Droidspaces 正占用模块，卸载会失败并显示 <b>Device or resource busy</b>，这时只能重启手机；<br>
+      · 卸载后立刻失去对应能力（例如卸掉 misc → 「允许沙箱」失效），但不会关机。
+    </div>
+    <div id="unloadList"></div>
+    <div class="msg" id="unloadMsg"></div>
+    <div class="mfoot">
+      <button onclick="closeUnload()">关闭</button>
+      <button class="danger" id="unloadAllBtn" onclick="unloadAll()"><svg class="ic" viewBox="0 0 24 24"><use href="#i-eject" xlink:href="#i-eject"/></svg>一键全部卸载</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var M = "/data/adb/modules/Droidspaces";
+var CBASE = "/data/local/Droidspaces/Containers";
+var seq = 0, busy = false, logTouched = false;
+var urealSynced = false;   /* 运行时真映射但缺意图文件时，只补写一次 */
+var ctrItems = [];
+
+function getTheme(){ try{ return localStorage.getItem("ds_theme") || "auto"; }catch(e){ return "auto"; } }
+function syncThemeSeg(){
+  var cur = getTheme();
+  var bs = document.querySelectorAll("#themeSeg button");
+  for(var i=0;i<bs.length;i++) bs[i].classList.toggle("active", bs[i].getAttribute("data-t") === cur);
+}
+function syncThemeColor(){
+  var m = document.getElementById("themeColor");
+  if(!m) return;
+  try{
+    var bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    if(bg) m.setAttribute("content", bg);
+  }catch(e){}
+}
+/* color-scheme 必须跟着强制主题一起改：页面被强制成深色而系统仍是浅色时，
+   若这里还写着 "dark light"，WebView 画布与系统栏底色会取浅色，顶部就露出白条。 */
+function syncScheme(){
+  var m = document.getElementById("schemeMeta");
+  if(!m) return;
+  var t = getTheme();
+  m.setAttribute("content", t === "dark" ? "dark" : (t === "light" ? "light" : "dark light"));
+}
+/* 让 WebView 沉浸式：状态栏盖在网页之上、画布延展到状态栏底下。
+   不调这一句，状态栏是管理器自带的系统白条，网页怎么改都碰不到它——
+   这正是前面几版「深色下状态栏还是白」反复出现的根因。调了之后，
+   我们自己的 .topbar 才能画到状态栏底下，把那块涂成主题色。
+   部分旧版管理器没有这个接口，try 掉即可，不影响其它功能。 */
+function applyEdgeToEdge(){
+  var b = window.ksu || window.kernelsu || window.KSU;
+  if(b && typeof b.enableEdgeToEdge === "function"){
+    try{ b.enableEdgeToEdge(true); }catch(e){}
+  }
+}
+
+function applyTheme(t){
+  if(t === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+  try{ localStorage.setItem("ds_theme", t); }catch(e){}
+  syncThemeSeg();
+  syncScheme();
+  syncThemeColor();
+  /* 主题切换后再调一次：让管理器按新的 color-scheme / theme-color 重新决定
+     状态栏图标的深浅对比，否则切到深色后图标可能还是浅色看不清。 */
+  applyEdgeToEdge();
+}
+
+function goTab(name){
+  var ts = document.querySelectorAll(".tab");
+  for(var i=0;i<ts.length;i++) ts[i].classList.toggle("active", ts[i].dataset.tab === name);
+  var ps = document.querySelectorAll(".page");
+  for(var j=0;j<ps.length;j++) ps[j].classList.toggle("active", ps[j].id === "page-" + name);
+  try{ localStorage.setItem("ds_tab", name); }catch(e){}
+  if(name === "status") doStatus(true);
+  else if(name === "ctr") loadCtr();
+  else { if(!logTouched) doLog(); }
+}
+
+function sh(cmd, ms){
+  return new Promise(function(resolve){
+    var b = window.ksu;
+    if(!b || typeof b.exec !== "function"){
+      resolve({errno:-1, stdout:"", stderr:"无 WebUI API（需 KernelSU / APatch）"});
+      return;
+    }
+    var name = "cb" + Date.now() + "_" + (seq++);
+    var done = false, timer = 0;
+    var finish = function(e,o,s){
+      if(done) return;
+      done = true;
+      if(timer) clearTimeout(timer);
+      delete window[name];
+      resolve({errno:e|0, stdout:o||"", stderr:s||""});
+    };
+    window[name] = finish;
+    try{ b.exec(cmd, "{}", name); }catch(err){ finish(-1, "", String(err)); return; }
+    timer = setTimeout(function(){ finish(-1, "", "超时（" + Math.round((ms || 15000)/1000) + "s）"); }, ms || 15000);
+  });
+}
+
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function bd(id, state, text){
+  var n = document.getElementById(id);
+  if(!n) return;
+  n.textContent = text;
+  n.className = "badge " + (state === true ? "on" : state === false ? "off" : "warn");
+}
+function toast(msg){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+}
+function setLog(s){ document.getElementById("log").textContent = s; logTouched = true; }
+
+function readState(){
+  return sh(
+    "echo K=$(uname -r | tr -d '\\n');" +
+    "echo L=$(grep -c '^droid_lkm ' /proc/modules 2>/dev/null);" +
+    "echo V=$(grep -c '^droid_lkm_vendor ' /proc/modules 2>/dev/null);" +
+    "echo C=$(grep -c '^droid_lkm_misc ' /proc/modules 2>/dev/null);" +
+    "echo PI=$(grep -c '^droid_lkm_pids ' /proc/modules 2>/dev/null);" +
+    "echo U=$([ -e /proc/self/uid_map ] && echo 1 || echo 0);" +
+    "echo B=$([ -f " + M + "/no_boot ] && echo 0 || echo 1);" +
+    "echo S=$([ -f " + M + "/skip_misc ] && echo 0 || echo 1);" +
+    "echo P=$([ -f " + M + "/no_precheck ] && echo 0 || echo 1);" +
+    "echo E=$([ -f " + M + "/delay ] && echo 1 || echo 0);" +
+    "echo D=$(cat " + M + "/delay 2>/dev/null | tr -dc '0-9');" +
+    "echo X=$([ -f " + M + "/blocked ] && echo 1 || echo 0);" +
+    "echo DV=$(getprop ro.product.model 2>/dev/null | tr -d ' ');" +
+    "echo LC=$([ -f " + M + "/load.crash ] && echo 1 || echo 0);" +
+    "echo IK=$([ -f " + M + "/allow_any_kernel ] && echo 1 || echo 0);" +
+    "echo AD=$([ -f " + M + "/allow_any_device ] && echo 1 || echo 0);" +
+    "echo F=$(grep -c devtmpfs /proc/filesystems 2>/dev/null);" +
+    "echo M=$(grep -c '^macvlan ' /proc/modules 2>/dev/null);" +
+    "echo G=$(grep -c '^ip6table_nat ' /proc/modules 2>/dev/null);" +
+    "echo KL=$([ -f " + M + "/skip_lkm ] && echo 0 || echo 1);" +
+    "echo KV=$([ -f " + M + "/skip_vendor ] && echo 0 || echo 1);" +
+    "echo KM=$([ -f " + M + "/skip_macvlan ] && echo 0 || echo 1);" +
+    "echo KN=$([ -f " + M + "/skip_ip6nat ] && echo 0 || echo 1);" +
+    "echo KP=$([ -f " + M + "/skip_pids ] && echo 0 || echo 1);" +
+    "echo VER=$(grep -m1 '^version=' " + M + "/module.prop 2>/dev/null | cut -d= -f2 | tr -d '\\r');" +
+    "echo AU=$(grep -m1 '^author=' " + M + "/module.prop 2>/dev/null | cut -d= -f2 | tr -d '\\r');" +
+    "echo DESC=$(grep -m1 '^description=' " + M + "/module.prop 2>/dev/null | cut -d= -f2- | tr -d '\\r');" +
+    "echo LG=$([ -f " + M + "/no_log ] && echo 0 || echo 1);" +
+    "echo UR=$([ -f " + M + "/real_userns ] && echo 1 || echo 0);" +
+    "echo UB=$(grep -o 'base=[0-9]*' /proc/droid_lkm_misc/status 2>/dev/null | head -1 | cut -d= -f2);" +
+    "echo UV=$(grep -m1 'userns view' /proc/droid_lkm_misc/status 2>/dev/null | tr -s ' ' | cut -d' ' -f4-);" +
+    "echo SZ=$(du -k " + M + "/load.log 2>/dev/null | cut -f1);" +
+    "echo N=$(ls /proc/self/ns/ 2>/dev/null | tr '\\n' ',')"
+  ).then(function(r){
+    var o = {};
+    (r.stdout || "").split("\n").forEach(function(line){
+      var i = line.indexOf("=");
+      if(i > 0) o[line.slice(0,i).trim()] = line.slice(i+1).trim();
+    });
+    var one = function(v){ return v === "1"; };
+    return {
+      kern: o.K || "",
+      lkm: one(o.L), ven: one(o.V), misc: one(o.C), pids: one(o.PI), umap: one(o.U),
+      boot: one(o.B), um: one(o.S), pre: one(o.P),
+      hasDelay: one(o.E), delay: parseInt(o.D || "0", 10) || 0,
+      blk: one(o.X), dev: o.DV || "", loadCrash: one(o.LC), anyKern: one(o.IK),
+      anyDev: one(o.AD),
+      fs: one(o.F),
+      mv: one(o.M),
+      n6: one(o.G),
+      kl: one(o.KL), kv: one(o.KV), km: one(o.KM), kn: one(o.KN), kp: one(o.KP),
+      lg: one(o.LG), sz: parseInt(o.SZ || "0", 10) || 0,
+      ureal: one(o.UR), ubase: o.UB || "", uview: o.UV || "",
+      ver: o.VER || "", au: o.AU || "", desc: o.DESC || "",
+      ns: (o.N || "").replace(/,+$/,"").replace(/,/g," ") || "–"
+    };
+  });
+}
+
+function showDelay(sec){
+  var num = document.getElementById("delayNum"), unit = document.getElementById("delayUnit");
+  var u = 1;
+  if(sec >= 3600 && sec % 3600 === 0) u = 3600;
+  else if(sec >= 60 && sec % 60 === 0) u = 60;
+  unit.value = String(u);
+  num.value = sec ? String(Math.round(sec/u)) : "30";
+}
+var delayRaw = 0;   /* 截断前的原值，用来提示"你填的超过了上限" */
+function delaySeconds(){
+  var n = parseInt(document.getElementById("delayNum").value || "0", 10) || 0;
+  var u = parseInt(document.getElementById("delayUnit").value || "1", 10) || 1;
+  delayRaw = Math.max(0, n*u);
+  return Math.min(600, delayRaw);
+}
+function syncBootUI(){
+  var boot = document.getElementById("t_boot").checked;
+  var del  = document.getElementById("t_delay").checked;
+  document.getElementById("rowDelay").classList.toggle("dimrow", !boot);
+  document.getElementById("rowDelay").querySelector("input").disabled = !boot;
+  document.getElementById("delayRow").classList.toggle("dimrow", !boot || !del);
+  document.getElementById("delayNum").disabled = !boot || !del;
+  document.getElementById("delayUnit").disabled = !boot || !del;
+}
+
+function pickedMods(){
+  var m = [];
+  if(document.getElementById("t_lkm").checked)  m.push("droid_lkm");
+  if(document.getElementById("t_ven").checked)  m.push("vendor");
+  if(document.getElementById("t_misc").checked) m.push("misc");
+  if(document.getElementById("t_pids").checked) m.push("pids");
+  if(document.getElementById("t_mv").checked)   m.push("macvlan");
+  if(document.getElementById("t_n6").checked)   m.push("ip6nat");
+  return m;
+}
+function syncLoadHint(){
+  var el = document.getElementById("loadHint");
+  if(!el) return;
+  var m = pickedMods(), btn = document.getElementById("loadBtn");
+  if(btn) btn.classList.toggle("dimmed", !m.length);
+  if(!m.length){
+    el.className = "hint alert";
+    el.innerHTML = "⚠️ 下方「加载内容」6 个开关全部关闭，点「加载」不会装入任何模块。";
+  }else{
+    el.className = "hint";
+    el.innerHTML = "「加载」按下方开关执行，本次将装入 <b>" + m.join(" · ") + "</b>（已在内存的会跳过）。" +
+                   "开关只决定「装哪些」，不会卸载已加载的模块；要重载先「卸载」再「加载」。";
+  }
+}
+
+function doStatus(silent){
+  return readState().then(function(st){
+    var kv = (st.kern || "").trim();
+    var dev = (st.dev || "").trim();
+    document.getElementById("kern").textContent =
+      (kv ? "内核 " + kv : "内核未知") + (dev ? " · " + dev : "");
+    /* 版本号和作者都直接读 module.prop，改文件即可生效，不用改网页 */
+    document.getElementById("ver").textContent = st.ver || "–";
+    var d = document.getElementById("desc");
+    d.textContent = st.desc || "–";
+    d.title = "author: " + (st.au || "未知");
+
+    bd("s1", st.lkm,  st.lkm  ? "已加载" : "未加载");
+    bd("s2", st.ven,  st.ven  ? "已加载" : "未加载");
+    bd("s3", st.misc, st.misc ? "已加载" : "未加载");
+    bd("s4", st.pids, st.pids ? "已加载" : "未加载");
+    /* 这两项原来读的是 /proc/self，那是 WebUI 自己的 shell，跟容器无关，
+       看到没有 user/pid/ipc 就以为 userns 没生效，纯属误读。改成读容器进程。 */
+    document.getElementById("ns").textContent = st.ns || "–";
+    renderCtrNs();
+    bd("s8", st.fs, st.fs ? "已注册" : "未注册");
+    bd("s9", st.mv, st.mv ? "已加载" : "未加载");
+    bd("s10", st.n6, st.n6 ? "已加载" : "未加载");
+
+    if(st.blk){
+      bd("s6", false, st.loadCrash ? "崩溃阻断" : "已阻断");
+      document.getElementById("s6").title = st.loadCrash
+        ? "上次加载后没撑过存活窗口，已自动拦截；确认稳定后点「解阻断」"
+        : "上次崩在 insmod，已拦截；确认稳定后点「解阻断」";
+    }
+    else{
+      if(!st.boot) bd("s6", null, "未启用");
+      else         bd("s6", true, "正常");
+      /* 上一次的阻断说明必须清掉，否则鼠标悬停还会看到过期的提示 */
+      document.getElementById("s6").title = st.boot
+        ? "开机自动加载已开启，守卫正常工作"
+        : "开机不自动加载，守卫只对你手动加载的模块生效";
+    }
+
+    if(st.anyDev || st.anyKern){
+      bd("s7", null, st.anyDev && st.anyKern ? "已全放开" : (st.anyDev ? "机型放开" : "内核放开"));
+      document.getElementById("s7").title =
+        "已建 allow_any_device / allow_any_kernel，跨机型或跨内核也会加载，注意风险";
+    } else {
+      bd("s7", true, "已启用");
+      document.getElementById("s7").title = "只在本机型 + 6.12.69-* 上加载，其它设备会自动退出";
+    }
+
+    document.getElementById("t_boot").checked = st.boot;
+    document.getElementById("t_misc").checked = st.um;
+    document.getElementById("t_lkm").checked = st.kl;
+    document.getElementById("t_ven").checked = st.kv;
+    document.getElementById("t_mv").checked  = st.km;
+    document.getElementById("t_n6").checked  = st.kn;
+    document.getElementById("t_pids").checked = st.kp;
+    document.getElementById("t_log").checked = st.lg;
+    document.getElementById("logSize").textContent = (st.sz || 0) + " KB";
+    document.getElementById("t_pre").checked  = st.pre;
+
+    /* 真 userns：开关是「下次加载」的意图，是否真生效看模块状态里的 real=1 */
+    document.getElementById("t_ureal").checked = st.ureal;
+    document.getElementById("uBase").textContent  = st.ubase || "200000";
+    document.getElementById("uBase2").textContent = st.ubase || "200000";
+    /* 探针行原来直接把「18 armed 0 missing real=1」塞进去，窄屏会从单词中间断开 */
+    var uv = st.uview || "";
+    var um = uv.match(/(\d+)\s+armed\s+(\d+)\s+missing/);
+    if(um){
+      var uok = parseInt(um[1], 10), umiss = parseInt(um[2], 10);
+      /* 只说明钩子挂上了多少，不说明容器拿到了命名空间 —— 后者由 paintUState() 按
+       容器进程真实的 uid_map 判，两者不能混在一行里说 */
+    uv = uok + "/" + (uok + umiss) + (umiss ? " · 缺 " + umiss : " · 钩子已挂");
+    } else {
+      uv = st.misc ? "未读取" : "misc 未加载";
+    }
+    document.getElementById("uProbe").textContent = uv;
+    /* 运行时真在跑（模块状态里有 real=1）才算数，光有意图文件不算 */
+    var uLive = /real=1/.test(st.uview || "");
+    if(!st.misc)                            bd("uState", false, "未加载");
+    else if(uLive)                          bd("uState", null,  "确认中");
+    else if(st.ureal)                       bd("uState", null,  "待重载");
+    else                                    bd("uState", false, "未启用");
+    /*
+     * 不再自动补写 real_userns 意图文件：real=1 只代表钩子挂上，不代表容器有命名空间。
+     * 以前这里还会提示「本次已生效」，等于替一个不成立的状态盖章
+     */
+    document.getElementById("t_delay").checked = st.hasDelay;
+    showDelay(st.delay);
+    syncBootUI();
+
+    var core = st.lkm && st.ven && st.misc;
+    var pill = document.getElementById("pill");
+    pill.textContent = core ? "全部就绪" : st.lkm ? "部分加载" : "未加载";
+    pill.className = "badge " + (core ? "on" : st.lkm ? "warn" : "off");
+    pill.title = core ? "3 个模块均已加载" : (st.lkm ? "主模块已加载，其余未加载" : "未加载任何模块");
+    syncLoadHint();
+    return st;
+  }).catch(function(err){
+    var pill = document.getElementById("pill");
+    pill.textContent = "读取失败";
+    pill.className = "badge off";
+    pill.title = String(err && err.message ? err.message : err);
+    return null;
+  });
+}
+
+document.getElementById("t_boot").addEventListener("change", function(e){
+  var want = e.target.checked;
+  sh((want ? "rm -f " : "touch ") + M + "/no_boot").then(doStatus).then(function(st){
+    var now = document.getElementById("t_boot").checked;
+    if(now !== want){ document.getElementById("t_boot").checked = !want; syncBootUI(); toast("写入失败，无法修改 no_boot"); return; }
+    toast(want ? "开机将自动加载" : "开机不再加载（手动模式）");
+  });
+});
+
+function bindSkip(id, file, onMsg, offMsg){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener("change", function(e){
+    var want = e.target.checked;
+    syncLoadHint();
+    sh((want ? "rm -f " : "touch ") + M + "/" + file).then(doStatus).then(function(){
+      var now = document.getElementById(id).checked;
+      if(now !== want){ document.getElementById(id).checked = !want; toast("写入失败：" + file); return; }
+      toast(want ? onMsg : offMsg);
+    });
+  });
+}
+bindSkip("t_lkm", "skip_lkm",    "加载时会带上 droid_lkm",   "已跳过 droid_lkm");bindSkip("t_ven", "skip_vendor", "加载时会带上 vendor",      "已跳过 vendor");
+bindSkip("t_pids","skip_pids",   "加载时会带上 pids（--pids-limit 才能生效）",
+                                 "已跳过 pids（--pids-limit 失效，DS 检查项变回 ✗）");
+bindSkip("t_mv",  "skip_macvlan","加载时会带上 macvlan",     "已跳过 macvlan");
+bindSkip("t_n6",  "skip_ip6nat", "加载时会带上 ip6table_nat","已跳过 ip6table_nat");
+
+/* 真 userns：只写「下次加载要不要 real_userns=1」的意图文件 */
+document.getElementById("t_ureal").addEventListener("change", function(e){
+  var want = e.target.checked;
+  sh((want ? "touch " : "rm -f ") + M + "/real_userns").then(doStatus).then(function(st){
+    if(!st) return;
+    if(document.getElementById("t_ureal").checked !== want){ toast("写入失败：real_userns"); return; }
+    toast(want ? "已开启，需「卸载 → 加载」生效，之后点「转换容器属主」"
+               : "已关闭，需「卸载 → 加载」回到恒等映射");
+  });
+});
+
+function doRelabel(){
+  if(busy) return;
+  var btn = document.getElementById("relabelBtn");
+  /* 硬护栏：容器不在 user namespace 里时，转换属主只是把磁盘改成基址，进程仍然是 0，
+     容器立刻读不动自己的文件（su 报 cannot set groups），还要再花几分钟 restore。
+     按钮已经 disabled，这里再判一次，防旧页面缓存或别处调用绕过。 */
+  var pick = null, ks = Object.keys(ctrProbe);
+  ks.forEach(function(k){ if(!pick || ctrProbe[k].run) pick = ctrProbe[k]; });
+  var um0 = (pick && pick.umap ? pick.umap : "").trim().replace(/\s+/g, " ");
+  if(!um0 || um0 === "0 0 4294967295"){
+    toast("已阻止：容器不在 user namespace 里，转换属主会让它读不动自己的文件");
+    return;
+  }
+  var old = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = "转换中…别退出";
+  toast("开始转换容器属主，大容器可能要几分钟");
+  /* 十万级文件，15s 默认超时一定不够 */
+  sh("sh " + M + "/userns.sh relabel all 2>&1", 600000).then(function(r){
+    btn.disabled = false; btn.innerHTML = old;
+    var txt = ((r.stdout||"") + (r.stderr||"")).trim() || "（无输出）";
+    setLog("【转换容器属主】\n" + txt);
+    if(r.errno === 0) toast("转换完成（详情见日志页）");
+    else toast(/超时/.test(r.stderr||"") ? "转换超时，看日志确认进度" : "转换失败，见日志页");
+    doStatus(true);
+  }).catch(function(err){
+    btn.disabled = false; btn.innerHTML = old;
+    toast("转换出错：" + String(err));
+  });
+}
+
+function doUsernsInfo(){
+  sh("sh " + M + "/userns.sh status; echo '--- 容器 ---'; sh " + M + "/userns.sh list")
+  .then(function(r){
+    var txt = ((r.stdout||"") + (r.stderr||"")).trim() || "（无输出）";
+    setLog("【userns 详情】\n" + txt);
+    toast("已写入日志页");
+  });
+}
+
+/* 日志开关 */
+document.getElementById("t_log").addEventListener("change", function(e){
+  var want = e.target.checked;
+  sh((want ? "rm -f " : "touch ") + M + "/no_log").then(doStatus).then(function(){
+    var now = document.getElementById("t_log").checked;
+    if(now !== want){ document.getElementById("t_log").checked = !want; toast("写入失败：no_log"); return; }
+    toast(want ? "已开启日志记录" : "已关闭日志记录（加载不受影响）");
+  });
+});
+
+document.getElementById("t_misc").addEventListener("change", function(e){
+  var want = e.target.checked;
+  syncLoadHint();
+  sh((want ? "rm -f " : "touch ") + M + "/skip_misc").then(doStatus).then(function(st){
+    if(document.getElementById("t_misc").checked !== want){ toast("写入失败，无法修改 skip_misc"); return; }
+    toast(want ? "下次加载会带上 userns + devtmpfs" : "下次加载跳过 misc（userns 与硬件访问都会失去）");
+  });
+});
+
+document.getElementById("t_pre").addEventListener("change", function(e){
+  var want = e.target.checked;
+  sh((want ? "rm -f " : "touch ") + M + "/no_precheck").then(doStatus).then(function(st){
+    if(document.getElementById("t_pre").checked !== want){ toast("写入失败，无法修改 no_precheck"); return; }
+    toast(want ? "已开启加载前自检" : "已关闭加载前自检");
+  });
+});
+
+document.getElementById("t_delay").addEventListener("change", function(e){
+  var want = e.target.checked;
+  if(want){
+    var s = delaySeconds();
+    if(s <= 0){ s = 30; document.getElementById("delayNum").value = "30"; document.getElementById("delayUnit").value = "1"; }
+    sh("echo " + s + " > " + M + "/delay").then(doStatus).then(function(){
+      if(!document.getElementById("t_delay").checked){ toast("写入失败，无法创建 delay"); return; }
+      toast("开机延迟 " + s + " 秒加载" + (delayRaw > 600 ? "（上限 600 秒，已截断）" : ""));
+    });
+  }else{
+    sh("rm -f " + M + "/delay").then(doStatus).then(function(){ toast("已关闭延迟加载"); });
+  }
+});
+
+function saveDelay(){
+  if(!document.getElementById("t_delay").checked) return;
+  var s = delaySeconds();
+  if(s <= 0){
+    sh("rm -f " + M + "/delay").then(doStatus).then(function(){
+      toast("延迟为 0，已自动关闭延迟加载");
+    });
+    return;
+  }
+  sh("echo " + s + " > " + M + "/delay").then(doStatus).then(function(st){
+    var tail = "";
+    if(delayRaw > 600)          tail = "（上限 600 秒，已截断）";
+    else if(st && st.delay !== s) tail = "（可能未写入）";
+    toast("延迟已设为 " + s + " 秒" + tail);
+  });
+}
+document.getElementById("delayNum").addEventListener("change", saveDelay);
+document.getElementById("delayUnit").addEventListener("change", saveDelay);
+
+(function(){
+  var el = document.getElementById("mirSel");
+  try{ el.value = localStorage.getItem("ds_mir") || "auto"; }catch(e){}
+  el.addEventListener("change", function(){
+    try{ localStorage.setItem("ds_mir", el.value); }catch(e){}
+    toast("已选「" + el.options[el.selectedIndex].text + "」，点「一键换源」写入");
+  });
+})();
+
+function doLoad(){
+  if(busy) return;
+  var pick = pickedMods();
+  if(!pick.length){ toast("「加载内容」开关全部关闭，没有可装入的模块"); return; }
+  busy = true;
+  /* 必须有 catch：异常时 busy 会一直是 true，「加载」按钮永久卡死 */
+  return sh("[ -f " + M + "/post-fs-data.sh ] && echo ok || echo no").then(function(chk){
+    if((chk.stdout||"").trim() !== "ok"){
+      busy = false; toast("缺少 post-fs-data.sh，请重新解压安装包"); return;
+    }
+    toast("加载中：" + pick.join(" · "));
+    return sh("PH_ACTION=1 sh " + M + "/post-fs-data.sh 2>&1").then(function(r){
+      var txt = ((r.stdout||"") + (r.stderr||"")).trim() || "（无输出）";
+      setLog("【加载 " + new Date().toLocaleTimeString() + "】\n" + txt);
+      return doStatus(true).then(function(st){
+        busy = false;
+        if(!st){ toast("加载完成，但状态读取失败（详情见日志页）"); return; }
+        var now = [], flag = {"droid_lkm":"lkm","vendor":"ven","misc":"misc","pids":"pids","macvlan":"mv","ip6nat":"n6"};
+        for(var i=0;i<pick.length;i++){ if(st[flag[pick[i]]]) now.push(pick[i]); }
+        if(now.length === pick.length) toast("已装入 " + now.length + "/" + pick.length + "：" + now.join(" · "));
+        else if(now.length)            toast("部分成功 " + now.length + "/" + pick.length + "，失败项见日志页");
+        else                           toast("未装入任何模块（详情见日志页）");
+      });
+    });
+  }).catch(function(err){
+    busy = false;
+    var txt = err && err.stderr ? err.stderr : (err && err.message ? err.message : String(err));
+    setLog("【加载失败】" + txt);
+    toast("加载出错：" + txt);
+  });
+}
+
+var MODS = [
+  {n:"droid_lkm",        d:"主模块 · PID / IPC / mqueue"},
+  {n:"droid_lkm_vendor", d:"厂商兼容 · oplus"},
+  {n:"droid_lkm_misc",   d:"userns + devtmpfs · 允许沙箱 / 硬件访问"},
+  {n:"droid_lkm_pids",   d:"pids 控制器 · --pids-limit 真实拦截 · 可单独装卸"},
+  {n:"macvlan",          d:"容器独立 IP · 模块自解析"},
+  {n:"ip6table_nat",     d:"IPv6 NAT · 模块自解析"}
+];
+
+function setUnloadMsg(txt, ok){
+  var el = document.getElementById("unloadMsg");
+  el.textContent = txt || "";
+  el.className = "msg " + (txt ? (ok ? "ok" : "bad") : "");
+}
+
+function openUnload(){
+  document.getElementById("mask").classList.add("show");
+  setUnloadMsg("", true);
+  refreshUnload();
+}
+function closeUnload(){
+  document.getElementById("mask").classList.remove("show");
+}
+
+function refreshUnload(){
+  return readState().then(function(st){
+    var loaded = [st.lkm, st.ven, st.misc, st.pids, st.mv, st.n6];
+    var html = "";
+    MODS.forEach(function(m, i){
+      var on = loaded[i];
+      html += '<div class="urow">' +
+              '<span class="k">' + m.n + '<small>' + m.d + '</small></span>' +
+              '<span class="badge ' + (on ? "on" : "") + '">' + (on ? "已加载" : "未加载") + '</span>' +
+              '<button ' + (on ? '' : 'disabled ') + 'onclick="unloadOne(' + i + ')">卸载</button>' +
+              '</div>';
+    });
+    document.getElementById("unloadList").innerHTML = html;
+    document.getElementById("unloadAllBtn").disabled = !(st.lkm || st.ven || st.misc || st.pids || st.mv || st.n6);
+    return st;
+  });
+}
+
+function unloadOne(i){
+  var m = MODS[i];
+  setUnloadMsg("正在卸载 " + m.n + " …", true);
+  // droid_lkm_misc 持有一个内部 devtmpfs mount, 那个 mount 持有模块引用,
+  // 直接 rmmod 会报 EBUSY。先写 release=1 让模块自己把 mount 放掉。
+  var pre = (m.n === "droid_lkm_misc")
+    ? "echo 1 > /sys/module/droid_lkm_misc/parameters/release 2>/dev/null; sleep 1; "
+    : "";
+  /* 末尾带 desc.sh：把 module.prop 的 description 同步成卸载后的真实状态，
+     它的输出丢到 /dev/null，免得混进给用户的报错信息里 */
+  return sh(pre + "rmmod " + m.n + " 2>&1; sh " + M + "/desc.sh >/dev/null 2>&1").then(function(r){
+    var out = ((r.stdout||"") + (r.stderr||"")).trim();
+    return sh("grep -c '^" + m.n + " ' /proc/modules 2>/dev/null").then(function(g){
+      var still = (g.stdout||"").trim() !== "0";
+      if(still){
+        var lines = out.split("\n").filter(function(x){ return x.trim(); });
+        var why = lines.length ? lines[lines.length-1].trim() : "仍被占用";
+        setUnloadMsg("✗ 卸载失败：" + why + "（容器或 dockerd 正在使用，需重启手机）", false);
+      } else {
+        setUnloadMsg("✓ 已卸载 " + m.n + "（文件没删，随时可以重新加载）", true);
+      }
+      return refreshUnload().then(function(){ return doStatus(true); });
+    });
+  });
+}
+
+function unloadAll(){
+  var btn = document.getElementById("unloadAllBtn");
+  btn.disabled = true;
+  setUnloadMsg("正在按顺序卸载：ip6nat → macvlan → pids → misc → vendor → 主模块 …", true);
+  return sh("rmmod ip6table_nat 2>&1; rmmod macvlan 2>&1; rmmod droid_lkm_pids 2>&1; " +
+            "echo 1 > /sys/module/droid_lkm_misc/parameters/release 2>/dev/null; sleep 1; " +
+            "rmmod droid_lkm_misc 2>&1; rmmod droid_lkm_vendor 2>&1; rmmod droid_lkm 2>&1; " +
+            "echo '___'; grep -cE '^(droid_lkm|droid_lkm_vendor|droid_lkm_misc|droid_lkm_pids|macvlan|ip6table_nat) ' /proc/modules 2>/dev/null; " +
+            "sh " + M + "/desc.sh >/dev/null 2>&1")
+  .then(function(r){
+    var out = (r.stdout||"") + (r.stderr||"");
+    var parts = out.split("___");
+    var left = parseInt(((parts[1]||"0").match(/\d+/)||["0"])[0], 10) || 0;
+    var errs = (parts[0]||"").split("\n").filter(function(x){ return x.trim(); });
+    if(left === 0){
+      setUnloadMsg("✓ 全部已卸载（模块已从内存移除，.ko 文件仍在模块目录）", true);
+    } else {
+      setUnloadMsg("✗ 还有 " + left + " 个未能卸载" +
+        (errs.length ? "：" + errs.join("；") : "") + " → 只能重启手机", false);
+    }
+    return refreshUnload().then(function(){ return doStatus(true); });
+  });
+}
+
+function doClearLog(){
+  return sh("rm -f " + M + "/load.log " + M + "/history.log " + M + "/insmod.crash " + M + "/load.log.* ; echo done")
+  .then(function(){
+    setLog("已清空：load.log / history.log / insmod.crash");
+    toast("日志已清空");
+    return doStatus(true);
+  });
+}
+
+function doRecover(){
+  sh("rm -f " + M + "/blocked " + M + "/insmod.crash " + M + "/insmod.inflight " +
+     M + "/load.crash " + M + "/boot_pending " + M + "/.boot_ok")
+  .then(doStatus).then(function(){
+    setLog("已清除：blocked / insmod.crash / insmod.inflight / load.crash / 存活标记");
+    toast("阻断已解除，下次开机重新尝试");
+  });
+}
+
+function q1(n){
+  return "'" + String(n).replace(/'/g, "'\\''") + "'";
+}
+
+/* 判断容器是否在跑，只看 /proc/mounts 一定错，按代价从低到高五条判据：
+   1) /proc/mounts 里有该容器路径 —— 容器与 root shell 共享 mount namespace；
+   2) 任一进程的 /proc/PID/mountinfo 里有该路径 —— 容器在自己的 mount ns 里，
+      但这个文件记录的是「该进程自己 ns 的挂载」，root 仍然读得到；
+   3) 任一进程的 /proc/PID/root 指向 $c/rootfs —— chroot 进容器，顺便拿到 pid；
+   4) 任一进程的 cgroup 路径里有容器名 —— pivot_root 之后挂载点全变成 "/"，
+      路径线索没了，只剩 cgroup 还留得住；
+   5) 兜底：/proc/PID/root 的 dev:inode 与 rootfs 相同 —— pivot_root 到普通目录时
+      根目录 inode 不变，这条能认出来，代价最大所以放最后。
+   另外 glob 出来的路径带尾斜杠、/proc/mounts 里的不带，必须先 c=${d%/}，
+   否则第 1 条永远匹配不上。拿到 pid 后状态页才能读容器真正的 ns 和 uid_map。 */
+var ctrProbe = {};
+
+function parseCtrProbe(r){
+  var m = {};
+  (r.stdout || "").split("\n").forEach(function(L){
+    var p = L.trim().split(/\s+/);
+    if(p.length < 3) return;
+    var e = m[p[1]];
+    if(!e) e = m[p[1]] = {run:false, pid:"", ns:"", umap:""};
+    if(p[0] === "RUN"){
+      e.run = (p[2] === "1");
+      e.pid = /^[0-9]+$/.test(p[3] || "") ? p[3] : "";
+    }
+    else if(p[0] === "NS")  e.ns   = p.slice(2).join(",").replace(/,+$/, "").replace(/,/g, " ");
+    else if(p[0] === "UM")  e.umap = p.slice(2).join(" ");
+  });
+  ctrProbe = m;
+  return m;
+}
+
+var ctrProbeBusy = null;
+
+/* 关键：整条命令只能有十几次 fork。
+   之前写成 for p in /proc/[0-9]*; do readlink ...; done —— 手机上几百个进程就是
+   几百次 fork，一次探测十几秒，页面像卡死（sh() 的超时是 15s，很容易被判超时）。
+   现在先把 proc 下所有进程的 root 一次性 ls 出来存进变量，之后每个容器只在这份文本里
+   grep，不再逐个进程 fork。 */
+function probeCtr(){
+  if(ctrProbeBusy) return ctrProbeBusy;
+  var cmd =
+    "R=$(ls -l /proc/[0-9]*/root 2>/dev/null); " +
+    "for d in " + CBASE + "/*/; do [ -d \"$d\" ] || continue; c=${d%/}; n=$(basename \"$c\"); " +
+    "live=0; pid=; " +
+    "grep -qsF \"$c/\" /proc/mounts && live=1; " +
+    "if [ \"$live\" = 0 ]; then grep -qsF \"$c/rootfs\" /proc/[0-9]*/mountinfo 2>/dev/null && live=1; fi; " +
+    "h=$(echo \"$R\" | grep -F \"$c/rootfs\" | head -1); " +
+    "if [ -n \"$h\" ]; then live=1; pid=$(echo \"$h\" | cut -d/ -f3); fi; " +
+    "if [ \"$live\" = 0 ]; then grep -qsE \"(^|/)$n(/|$)\" /proc/[0-9]*/cgroup 2>/dev/null && live=1; fi; " +
+    "if [ -z \"$pid\" ]; then g=$(grep -lE \"(^|/)$n(/|$)\" /proc/[0-9]*/cgroup 2>/dev/null | head -1); " +
+      "[ -n \"$g\" ] && pid=$(echo \"$g\" | cut -d/ -f3); fi; " +
+    "echo \"RUN $n $live $pid\"; " +
+    "if [ -n \"$pid\" ]; then echo \"NS $n $(ls /proc/$pid/ns/ 2>/dev/null | tr '\\n' ',' | sed 's/,$//')\"; " +
+      "echo \"UM $n $(head -1 /proc/$pid/uid_map 2>/dev/null | tr -d '\\n')\"; fi; done";
+
+  /* 并发去重：状态页和容器页可能同时发起，同一个 Promise 复用即可，
+     否则两条命令会在 shell 里排队，看起来还是卡 */
+  var p = sh(cmd).then(function(r){
+    /* sh() 超时不会 reject，只是带 "超时（15s）" 的 stderr。
+       探测一旦超时就退避一分钟，别让每次刷新都白等 15 秒。 */
+    if(r && /超时/.test(r.stderr || "")){
+      ctrProbeNext = Date.now() + 60000;
+      var err = new Error("探测超时（15s），已跳过，1 分钟后再试");
+      err.skipped = true;
+      throw err;
+    }
+    return parseCtrProbe(r);
+  });
+  ctrProbeBusy = p.then(function(m){ ctrProbeBusy = null; return m; },
+                        function(e){ ctrProbeBusy = null; throw e; });
+  return ctrProbeBusy;
+}
+
+/* 探测要遍历 /proc，不能每次 doStatus 都扫一遍（开关一拨就会触发），
+   15 秒内直接复用上次结果；容器页的 loadCtr() 每次都会强制重扫。
+   超时后退避到 ctrProbeNext（1 分钟），免得每次刷新都白等一次 15 秒超时。 */
+var ctrProbeAt = 0, ctrProbeNext = 0;
+
+function paintCtrNs(){
+  var b = document.getElementById("s5"), c = document.getElementById("nsC");
+  if(!b || !c) return;
+  var ks = Object.keys(ctrProbe);
+  if(!ks.length){
+    b.textContent = "无容器"; b.className = "badge"; b.title = "没找到容器目录";
+    c.textContent = "–";
+    paintUState(null);
+    return;
+  }
+  var pick = null;
+  ks.forEach(function(k){ if(!pick || ctrProbe[k].run) pick = ctrProbe[k]; });
+
+  var um = (pick.umap || "").trim();
+  if(!um){
+    b.textContent = "未取到"; b.className = "badge";
+    b.title = "没定位到容器进程，读不到 uid_map";
+  }else if(um.replace(/\s+/g, " ") === "0 0 4294967295"){
+    b.textContent = "未映射"; b.className = "badge off";
+    b.title = "0 0 4294967295 是宿主的恒等全映射，说明这个进程不在 user namespace 里";
+  }else{
+    b.textContent = um; b.className = "badge on";
+    b.title = "容器进程在 user namespace 内，uid 已做映射";
+  }
+
+  c.style.color = "";
+  if(pick.ns){
+    var have = pick.ns.split(/\s+/);
+    /* 只列核心 6 项，一行放得下；time / time_for_children / cgroup 这些噪声进 title */
+    var core = ["user", "pid", "ipc", "uts", "net", "mnt"];
+    var got  = core.filter(function(x){ return have.indexOf(x) >= 0; });
+    var miss = core.filter(function(x){ return have.indexOf(x) < 0; });
+    c.textContent = got.join(" ") || "–";
+    c.title = "完整列表：" + pick.ns + (miss.length ? "（缺少 " + miss.join(" ") + "）" : "");
+    c.style.color = miss.length ? "var(--warn)" : "";
+  }else{
+    c.textContent = "–（未定位到容器进程）";
+    c.title = "没定位到容器进程，无法读取它的 namespace";
+  }
+  paintUState(pick);
+}
+
+/* 真 userns 只有一条判据：容器 init 进程是否真的在 user namespace 里。
+   模块 status 里的 real=1 只代表「翻译钩子挂上了」，钩子挂满也造不出命名空间；
+   内核把 CONFIG_USER_NS 关掉时，unshare(CLONE_NEWUSER) 直接 EINVAL，没有别的路。
+   之前这里拿 real=1 当「已生效」，和同页的「容器 uid_map 未映射」「容器 ns 缺 user」
+   自相矛盾 —— 一个页面两个答案，看的人只能信更乐观的那个，这是必须修的。 */
+function paintUState(pick){
+  var b = document.getElementById("uState");
+  if(!b) return;
+  var um = (pick && pick.umap ? pick.umap : "").trim().replace(/\s+/g, " ");
+  /* 0 0 4294967295 是 init_user_ns 的全量恒等映射，出现它就说明不在任何 userns 里 */
+  var inNs = !!um && um !== "0 0 4294967295";
+  var btn   = document.getElementById("relabelBtn");
+  var probe = document.getElementById("uProbe");
+  var sw    = document.getElementById("t_ureal");
+
+  if(inNs){
+    bd("uState", true, "已生效");
+    b.title = "容器进程在 user namespace 内，uid_map = " + um;
+    if(btn){ btn.disabled = false; btn.title = "把 rootfs 里 root 的文件改到容器 uid 基址"; }
+    if(sw) sw.disabled = false;
+    if(probe) probe.style.color = "";
+  }else{
+    bd("uState", false, "未生效");
+    b.title = "容器进程不在 user namespace 里"
+            + (um ? "（uid_map 是宿主恒等映射 " + um + "）" : "（没定位到容器进程）")
+            + "。内核未启用 CONFIG_USER_NS，模块挂再多翻译钩子也换不来真实的命名空间";
+    /* 这时点「转换容器属主」是纯破坏：文件被改成基址、进程还是 0，容器立刻读不动自己的文件 */
+    if(btn){
+      btn.disabled = true;
+      btn.title = "已禁用：内核未启用 CONFIG_USER_NS，容器拿不到 user namespace。"
+                + "此时转换属主只会让容器读不动自己的文件，还要再花几分钟还原";
+    }
+    if(sw) sw.disabled = true;
+    if(probe) probe.style.color = "var(--warn)";
+  }
+}
+
+function renderCtrNs(force){
+  var b = document.getElementById("s5"), c = document.getElementById("nsC");
+  if(!b || !c) return;
+  var now = Date.now();
+  var stale = !ctrProbeAt || now >= ctrProbeNext || !Object.keys(ctrProbe).length;
+  if(!force && !stale){ paintCtrNs(); return; }
+  b.textContent = "读取中"; b.className = "badge";
+  c.textContent = "读取中"; c.title = "";
+  probeCtr().then(function(){
+    ctrProbeAt = Date.now();
+    ctrProbeNext = ctrProbeAt + 15000;
+    paintCtrNs();
+  }).catch(function(e){
+    ctrProbeAt = Date.now();
+    b.textContent = (e && e.skipped) ? "探测超时" : "读取失败";
+    b.className = "badge off";
+    b.title = String(e && e.message ? e.message : e);
+    c.textContent = "–";
+  });
+}
+
+function loadCtr(){
+  var cn = document.getElementById("ctrN");
+  cn.textContent = "读取中"; cn.className = "badge";
+  var runMap = {};
+
+  /* 探测失败（含超时）不能把整条链断掉：容器列表照样要出来，只是状态显示未知 */
+  return probeCtr()
+  .catch(function(){ return ctrProbe; })
+  .then(function(m){
+    ctrProbeAt = Date.now();
+    Object.keys(m).forEach(function(k){ runMap[k] = m[k].run; });
+    return sh("sh " + M + "/mirror.sh list 2>&1");
+  })
+  .then(function(r){
+    var out = (r.stdout||"").trim() || "（无输出）";
+    var items = [], cur = null;
+    out.split("\n").forEach(function(L){
+      var m = L.match(/^\[(\d+)\]\s+(\S+)\s+(.*?)\s*\(([^()]*)\)\s*$/);
+      if(m){ cur = {name:m[2], desc:m[3], tag:m[4], src:""}; items.push(cur); }
+      else if(/^\s+源:/.test(L) && cur){ cur.src = L.replace(/^\s+源:\s*/,""); }
+    });
+
+    ctrItems = items;
+    bd("ctrN", items.length > 0, items.length > 0 ? (items.length + " 个") : "未发现");
+
+    var html = "";
+    items.forEach(function(it, idx){
+      var pb  = ctrProbe[it.name];
+      var run = pb ? pb.run : undefined;
+      /* 把判据说清楚：三条都没命中才显示「未运行」。App 显示运行中而这里是未运行时，
+         说明网页所在的 root shell 找不到容器的任何痕迹，以 App 为准。 */
+      var why = 'title="五条判据任一命中即运行中：/proc/mounts、各进程 mountinfo、' +
+                '/proc/PID/root、各进程 cgroup、root 的 dev:inode' +
+                (pb && pb.pid ? '（容器进程 pid ' + pb.pid + '）' : '') +
+                '。若 App 显示运行中而这里显示未运行，点「一键诊断」把 Download 里的 ns.txt 发出来"';
+      var badge = (run === true)  ? '<span class="badge on" ' + why + '>运行中</span>'
+                : (run === false) ? '<span class="badge off" ' + why + '>未运行</span>'
+                                  : '<span class="badge" ' + why + '>未知</span>';
+      html += '<div class="ctr">';
+      html += '<div class="row"><span class="k">' + esc(it.name) + '</span>' + badge + '</div>';
+      html += '<div class="row"><span class="k" style="opacity:.62;font-size:12px">' +
+              esc(it.desc) + ' · ' + esc(it.tag) + '</span></div>';
+      if(it.src){
+        html += '<div class="row"><span class="k" style="opacity:.55;font-size:11.5px">软件源</span>' +
+                '<span class="v" style="max-width:78%;font-size:11.5px;line-height:1.45">' + esc(it.src) + '</span></div>';
+      }
+      /* 用 forEach 的索引，不要用 indexOf：容器重名时会定位到第一个，按错按钮 */
+      html += '<div class="mini">' +
+              '<button onclick="mirrorOne(' + idx + ',\'mirror\')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-swap" xlink:href="#i-swap"/></svg>换源</button>' +
+              '<button onclick="mirrorOne(' + idx + ',\'dns\')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-signal" xlink:href="#i-signal"/></svg>DNS</button>' +
+              '<button onclick="showSrc(' + idx + ')"><svg class="ic" viewBox="0 0 24 24"><use href="#i-file" xlink:href="#i-file"/></svg>源文件</button>' +
+              '</div>';
+      html += '</div>';
+    });
+    document.getElementById("ctrList").innerHTML = html || ('<div style="padding:8px 0">' + esc(out) + '</div>');
+
+    var hosts = [];
+    items.forEach(function(it){
+      var h = (it.src.match(/\/\/([^\/]+)/)||[])[1];
+      if(h && hosts.indexOf(h) < 0) hosts.push(h);
+    });
+    document.getElementById("curSrc").textContent =
+      hosts.length === 0 ? "（未配置）" :
+      hosts.length === 1 ? hosts[0] :
+      hosts.length + " 个不同（" + hosts[0] + " 等）";
+    return out;
+  }).catch(function(e){
+    document.getElementById("ctrList").textContent = "读取失败：" + e;
+  });
+}
+
+function mirrorOne(idx, act){
+  var it = ctrItems[idx];
+  if(!it){ toast("容器信息已过期，请刷新列表"); return; }
+  var name = it.name;
+  var sel = (document.getElementById("mirSel")||{}).value || "auto";
+  var label = (act === "dns" ? "网络优化" : "换源");
+  toast(label + "：" + name + " …");
+  return sh("sh " + M + "/mirror.sh " + act + " " + sel + " " + q1(name) + " 2>&1").then(function(r){
+    var txt = ((r.stdout||"") + (r.stderr||"")).trim() || "（无输出）";
+    setLog("【" + name + " · " + label + " " + new Date().toLocaleTimeString() + "】\n" + txt);
+    return loadCtr().then(function(){ toast(name + " 完成（详情见日志页）"); });
+  });
+}
+
+function showSrc(idx){
+  var it = ctrItems[idx];
+  if(!it){ toast("容器信息已过期，请刷新列表"); return; }
+  var name = it.name;
+  /* 新版 Ubuntu 用 deb822 格式（sources.list.d/ubuntu.sources），只有旧版才有 sources.list */
+  var A = CBASE + "/" + q1(name) + "/rootfs/etc/apt";
+  return sh("cat " + A + "/sources.list 2>/dev/null" +
+            " || cat " + A + "/sources.list.d/ubuntu.sources 2>/dev/null" +
+            " || echo '(文件不存在，容器可能尚未初始化)'")
+  .then(function(r){
+    setLog("【" + name + " 的 sources.list】\n" + ((r.stdout||"").trim() || "(空)"));
+    toast("已显示在日志页");
+  });
+}
+
+function doMirror(act){
+  var sel = (document.getElementById("mirSel")||{}).value || "auto";
+  toast((act === "dns" ? "网络优化" : "换源") + " 执行中…");
+  return sh("sh " + M + "/mirror.sh " + act + " " + sel + " 2>&1").then(function(r){
+    var txt = ((r.stdout||"") + (r.stderr||"")).trim() || "（无输出）";
+    setLog("【" + (act === "dns" ? "网络优化" : "换源") + " " + new Date().toLocaleTimeString() + "】\n" + txt);
+    return loadCtr().then(function(){
+      toast(act === "dns" ? "网络优化完成（详情见日志页）" : "换源完成，进容器跑 apt update");
+    });
+  });
+}
+
+function doLog(){
+  /* 读完置 true，否则每次切回日志页都会自动刷新一次，把刚看的 dmesg / 源文件覆盖掉 */
+  return sh("tail -n 60 " + M + "/load.log 2>/dev/null").then(function(r){
+    document.getElementById("log").textContent = (r.stdout||"").trim() || "(暂无日志)";
+    logTouched = true;
+    toast("已刷新");
+  });
+}
+function doDmesg(){
+  return sh("dmesg | grep -iE 'droid_lkm|userns|devtmpfs|Unknown symbol' | tail -n 40").then(function(r){
+    setLog((r.stdout||"").trim() || "(dmesg 里没有相关记录)");
+    toast("已读取内核日志");
+  });
+}
+function doHistory(){
+  return sh("tail -n 20 " + M + "/history.log 2>/dev/null").then(function(r){
+    setLog((r.stdout||"").trim() || "(暂无历史，重启一次后就有了)");
+    toast("已读取历史");
+  });
+}
+function doExport(){
+  return sh(
+    "D=/sdcard/Download; mkdir -p $D 2>/dev/null;" +
+    "T=$(date +%Y%m%d_%H%M%S);" +
+    "cp " + M + "/load.log $D/ds_load_$T.log 2>/dev/null;" +
+    "cp " + M + "/history.log $D/ds_history_$T.log 2>/dev/null;" +
+    "echo \"导出目录: $D\"; ls $D 2>/dev/null | grep '^ds_' | tail -4"
+  ).then(function(r){
+    setLog((r.stdout||"") + (r.stderr||"") || "导出失败");
+    toast("已导出到 Download");
+  });
+}
+function doDiag(){
+  toast("正在收集…");
+  return sh(
+    "T=$(date +%m%d_%H%M%S); D=/sdcard/Download/dsdiag_$T;" +
+    "if ! mkdir -p $D 2>/dev/null; then D=/data/local/tmp/dsdiag_$T; mkdir -p $D; fi;" +
+    "{ uname -a; echo; cat /proc/version; } > $D/system.txt 2>&1;" +
+    "lsmod | grep -E 'droid_lkm|macvlan' > $D/lsmod.txt 2>&1;" +
+    "dmesg | grep -iE 'droid_lkm|userns|devtmpfs|Unknown symbol|KERNEL_SECURITY' | tail -300 > $D/dmesg.txt 2>&1;" +
+    "ls -l /proc/self/ns/ > $D/ns.txt 2>&1; cat /proc/self/uid_map >> $D/ns.txt 2>&1;" +
+    "echo '' >> $D/ns.txt; echo '=== 容器进程探测 ===' >> $D/ns.txt;" +
+    "for d in " + CBASE + "/*/; do [ -d \"$d\" ] || continue; c=${d%/}; echo \"## $c\" >> $D/ns.txt; " +
+      "grep -F \"$c/\" /proc/mounts 2>/dev/null | head -4 >> $D/ns.txt; " +
+      "ls -l /proc/[0-9]*/root 2>/dev/null | grep -F \"$c/rootfs\" | head -4 >> $D/ns.txt; " +
+      "grep -lF \"$c/rootfs\" /proc/[0-9]*/mountinfo 2>/dev/null | head -4 >> $D/ns.txt; " +
+    "done;" +
+    "cp " + M + "/load.log $D/ 2>/dev/null; cp " + M + "/history.log $D/ 2>/dev/null;" +
+    "ls -l " + M + " " + M + "/ko > $D/files.txt 2>&1; md5sum " + M + "/ko/*.ko >> $D/files.txt 2>&1;" +
+    "ls -d " + CBASE + "/*/ 2>/dev/null > $D/containers.txt;" +
+    "for c in " + CBASE + "/*/rootfs; do echo \"## $c\"; head -3 $c/etc/apt/sources.list 2>/dev/null; cat $c/etc/resolv.conf 2>/dev/null; done >> $D/containers.txt 2>&1;" +
+    "tar czf $D.tgz -C $(dirname $D) $(basename $D) 2>/dev/null && rm -rf $D;" +
+    "echo \"诊断包: $D.tgz\"; ls -l $D.tgz 2>/dev/null || echo '打包失败'"
+  ).then(function(r){
+    setLog((r.stdout||"") + (r.stderr||"") || "诊断失败");
+    toast("诊断包已生成（详情见日志页）");
+  });
+}
+
+var segBtns = document.querySelectorAll("#themeSeg button");
+for(var k=0;k<segBtns.length;k++){
+  segBtns[k].addEventListener("click", function(){
+    var t = this.getAttribute("data-t");
+    applyTheme(t);
+    toast("主题：" + (t === "auto" ? "跟随系统" : t === "dark" ? "深色" : "浅色"));
+  });
+}
+
+applyTheme(getTheme());
+(function(){
+  var t = "status";
+  try{ t = localStorage.getItem("ds_tab") || "status"; }catch(e){}
+  if(location.hash) t = location.hash.slice(1) || t;
+  goTab(t);
+  if(t !== "status") doStatus(true);
+})();
+</script>
+</body>
+</html>
