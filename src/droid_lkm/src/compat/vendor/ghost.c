@@ -14,8 +14,6 @@
 #include <linux/preempt.h>
 #include <linux/threads.h>
 #include <linux/workqueue.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
 
 #include "core.h"
 #include "ds_compat.h"
@@ -227,12 +225,11 @@ static bool dlc_module_loaded(const char *name)
 #define DLC_PID_MAX_LOG_MAX	3
 /*
  * Measured on PMB110: a container writes 4194304 and the cap lands 0.6 s
- * later with a 1 s period, so the window is as wide as the period. pid only
- * has to climb 68 places inside it to leave the vendor range, which is a few
- * milliseconds of forking. 200 ms shrinks the window by 5x for one integer
- * comparison per tick.
+ * later. pid only has to climb 68 places inside that window to leave the
+ * vendor range, which is a few milliseconds of forking, so the period is
+ * the whole ballgame here.
  */
-#define DLC_PID_MAX_WATCH_MS	200
+#define DLC_PID_MAX_WATCH_MS	1000
 
 static int dlc_pid_max_caps;
 
@@ -330,56 +327,8 @@ static void dlc_pid_max_watch_stop(void)
 	cancel_delayed_work_sync(&dlc_pid_max_work);
 }
 
-/*
- * Same reason as the ddl guard: every way this fix can quietly do nothing -
- * pid_max not resolved, the module parameter set to -1, the cap never firing
- * because no container ever raised it - looks identical from the outside,
- * which is "the module loaded, 6/6". Say it here instead.
- */
-static int dlc_pid_max_show(struct seq_file *m, void *v)
-{
-	int *addr = dlc_vendor_syms.pid_max;
-
-	if (dlc_pid_max_cap < 0)
-		seq_puts(m, "state     off (pid_max_cap=-1)\n");
-	else if (!addr)
-		seq_puts(m, "state     symbol-missing (pid_max not resolved)\n");
-	else if (dlc_pid_max_watch)
-		seq_printf(m, "state     watching (%d ms)\n", DLC_PID_MAX_WATCH_MS);
-	else
-		seq_puts(m, "state     idle\n");
-
-	seq_printf(m, "target    %d\n", PID_MAX_DEFAULT);
-	seq_printf(m, "caps      %d\n", dlc_pid_max_caps);
-	if (addr)
-		seq_printf(m, "pid_max   %d\n", READ_ONCE(*addr));
-	else
-		seq_puts(m, "pid_max   unresolved\n");
-	seq_printf(m, "ghost     %s\n", dlc_ghost_ready ? "hooked" : "off");
-	return 0;
-}
-
-static int dlc_pid_max_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, dlc_pid_max_show, NULL);
-}
-
-static const struct proc_ops dlc_pid_max_pops = {
-	.proc_open	= dlc_pid_max_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_release	= single_release,
-};
-
-static struct proc_dir_entry *dlc_pid_max_pde;
-
 void dlc_ghost_exit(void)
 {
-	if (dlc_pid_max_pde) {
-		proc_remove(dlc_pid_max_pde);
-		dlc_pid_max_pde = NULL;
-	}
-
 	dlc_pid_max_watch_stop();
 	ds_hook_remove(&dlc_ftbv_hook);
 	dlc_ghost_ready = false;
@@ -388,10 +337,6 @@ void dlc_ghost_exit(void)
 int dlc_ghost_init(void)
 {
 	int ret;
-
-	if (!dlc_pid_max_pde)
-		dlc_pid_max_pde = proc_create("pid_max_guard", 0444, NULL,
-					      &dlc_pid_max_pops);
 
 	/* the cap stands on its own, arm it even when the ghost task is off */
 	dlc_pid_max_watch_start();

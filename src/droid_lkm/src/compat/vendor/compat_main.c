@@ -49,14 +49,13 @@ static int __init droid_lkm_vendor_init(void)
 	 * Vendor ddl history bounds, data only. Not fatal: the pid_max cap and
 	 * the ghost task stand on their own, and a vendor build without the
 	 * shape this guard knows only loses the second safety net. Say so out
-	 * loud instead of dropping the result - who is holding the phone reads
-	 * /proc/ddl_guard, and a wrong answer here is a dead phone later.
+	 * loud instead of dropping the result.
 	 */
 	{
 		int ddl_ret = dlc_ddl_hit_init();
 
 		if (ddl_ret)
-			pr_err("[droid_lkm_vendor] ddl guard not armed (%d), see /proc/ddl_guard\n",
+			pr_err("[droid_lkm_vendor] ddl guard not armed (%d)\n",
 			       ddl_ret);
 	}
 	if (ret) {

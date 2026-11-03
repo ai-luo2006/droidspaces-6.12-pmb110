@@ -8,8 +8,6 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/pid.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
 
 #include "core.h"
 #include "ddl_hit.h"
@@ -29,48 +27,6 @@ static void **dlc_ddl_slot;
 
 static u32 *dlc_guard_insn;
 static u32 dlc_guard_orig;
-
-/*
- * The guard is silent by design - a patched cbnz returns without a trace, and
- * a vendor build that does not match the shape above is left alone with a
- * pr_warn that dmesg drops within minutes. Neither outcome was visible to the
- * person holding the phone, so both land here instead: one cat, one answer.
- */
-static const char *dlc_guard_state = "not-initialised";
-static const char *dlc_guard_detail = "init has not run";
-static unsigned long dlc_guard_func;
-static u32 dlc_guard_seen[3];
-
-static int dlc_guard_show(struct seq_file *m, void *v)
-{
-	static const char *const what[3] = {
-		"cbnz@0x118", "ldp@0x130", "brk@0x144",
-	};
-	int i;
-
-	seq_printf(m, "state     %s\n", dlc_guard_state);
-	seq_printf(m, "detail    %s\n", dlc_guard_detail);
-	if (dlc_guard_func) {
-		seq_printf(m, "function  %px\n", (void *)dlc_guard_func);
-		for (i = 0; i < ARRAY_SIZE(what); i++)
-			seq_printf(m, "  %-12s %08x\n", what[i], dlc_guard_seen[i]);
-	}
-	return 0;
-}
-
-static int dlc_guard_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, dlc_guard_show, NULL);
-}
-
-static const struct proc_ops dlc_guard_pops = {
-	.proc_open	= dlc_guard_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_release	= single_release,
-};
-
-static struct proc_dir_entry *dlc_guard_pde;
 
 static bool dlc_ddl_is_pointer(unsigned long val)
 {
@@ -144,14 +100,7 @@ static int dlc_ddl_guard(unsigned long func)
 	ldp = READ_ONCE(*epilogue);
 	brk = READ_ONCE(*trap);
 
-	dlc_guard_func = func;
-	dlc_guard_seen[0] = insn;
-	dlc_guard_seen[1] = ldp;
-	dlc_guard_seen[2] = brk;
-
 	if (insn != DLC_DDL_CBNZ || ldp != DLC_DDL_LDP || brk != DLC_DDL_BRK) {
-		dlc_guard_state = "shape-mismatch";
-		dlc_guard_detail = "vendor build is not the one this fix knows, an out of range index still traps";
 		pr_warn("[droid_lkm_vendor] ddl guard: %px reads %08x/%08x/%08x, not the shape this fix knows, left alone\n",
 			(void *)func, insn, ldp, brk);
 		return -EINVAL;
@@ -159,8 +108,6 @@ static int dlc_ddl_guard(unsigned long func)
 
 	ret = dlc_ddl_patch_word(guard, branch);
 	if (ret) {
-		dlc_guard_state = "patch-failed";
-		dlc_guard_detail = "write refused, an out of range index still traps";
 		pr_warn("[droid_lkm_vendor] ddl guard: patch failed (%d), an out of range index will still trap\n",
 			ret);
 		return ret;
@@ -168,8 +115,6 @@ static int dlc_ddl_guard(unsigned long func)
 
 	dlc_guard_insn = guard;
 	dlc_guard_orig = insn;
-	dlc_guard_state = "patched";
-	dlc_guard_detail = "an out of range history index returns instead of trapping";
 	pr_info("[droid_lkm_vendor] ddl guard: out of range history index now returns instead of trapping\n");
 	return 0;
 }
@@ -182,14 +127,7 @@ int dlc_ddl_hit_init(void)
 	void *slot;
 	void *table;
 
-	if (!dlc_guard_pde)
-		dlc_guard_pde = proc_create("ddl_guard", 0444, NULL,
-					    &dlc_guard_pops);
-
 	if (!sym || !func) {
-		dlc_guard_state = "symbol-missing";
-		dlc_guard_detail = !sym ? "ddl_sdata not resolved"
-					: "update_ddl_hit_history not resolved";
 		pr_warn("[droid_lkm_vendor] ddl: no %s, history left alone\n",
 			!sym ? "ddl_sdata" : "update_ddl_hit_history");
 		return -ENOENT;
@@ -216,16 +154,9 @@ int dlc_ddl_hit_init(void)
 
 void dlc_ddl_hit_exit(void)
 {
-	if (dlc_guard_pde) {
-		proc_remove(dlc_guard_pde);
-		dlc_guard_pde = NULL;
-	}
-
 	if (dlc_guard_insn) {
 		dlc_ddl_patch_word(dlc_guard_insn, dlc_guard_orig);
 		dlc_guard_insn = NULL;
-		dlc_guard_state = "restored";
-		dlc_guard_detail = "module unloaded, the vendor branch is back";
 	}
 
 	if (!dlc_ddl_slot || !dlc_ddl_table)
