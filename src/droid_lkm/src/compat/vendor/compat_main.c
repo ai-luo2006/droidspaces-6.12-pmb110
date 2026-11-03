@@ -45,8 +45,20 @@ static int __init droid_lkm_vendor_init(void)
 	// a silent miss leaves vendor callers with NULL
 	ret = dlc_ghost_init();
 
-	/* vendor ddl history bounds, data only */
-	(void)dlc_ddl_hit_init();
+	/*
+	 * Vendor ddl history bounds, data only. Not fatal: the pid_max cap and
+	 * the ghost task stand on their own, and a vendor build without the
+	 * shape this guard knows only loses the second safety net. Say so out
+	 * loud instead of dropping the result - who is holding the phone reads
+	 * /proc/ddl_guard, and a wrong answer here is a dead phone later.
+	 */
+	{
+		int ddl_ret = dlc_ddl_hit_init();
+
+		if (ddl_ret)
+			pr_err("[droid_lkm_vendor] ddl guard not armed (%d), see /proc/ddl_guard\n",
+			       ddl_ret);
+	}
 	if (ret) {
 		pr_err("[droid_lkm_vendor] ghost: refusing to load, hook not installed (%d); ghost=0 turns the fixup off\n",
 		       ret);

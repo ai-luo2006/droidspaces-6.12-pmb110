@@ -13,8 +13,9 @@
 #include <linux/string.h>
 #include <linux/preempt.h>
 #include <linux/threads.h>
-
-#include <linux/threads.h>
+#include <linux/workqueue.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 #include "core.h"
 #include "ds_compat.h"
@@ -223,6 +224,18 @@ static bool dlc_module_loaded(const char *name)
 	return true;
 }
 
+#define DLC_PID_MAX_LOG_MAX	3
+/*
+ * Measured on PMB110: a container writes 4194304 and the cap lands 0.6 s
+ * later with a 1 s period, so the window is as wide as the period. pid only
+ * has to climb 68 places inside it to leave the vendor range, which is a few
+ * milliseconds of forking. 200 ms shrinks the window by 5x for one integer
+ * comparison per tick.
+ */
+#define DLC_PID_MAX_WATCH_MS	200
+
+static int dlc_pid_max_caps;
+
 static void dlc_ghost_audit_pid_max(void)
 {
 	int *pid_max_addr = dlc_vendor_syms.pid_max;
@@ -239,15 +252,24 @@ static void dlc_ghost_audit_pid_max(void)
 		if (value <= cap)
 			return;
 		WRITE_ONCE(*pid_max_addr, cap);
-		pr_warn("[droid_lkm_vendor] pid_max %d -> %d by module parameter\n",
-			value, cap);
+		if (dlc_pid_max_caps < DLC_PID_MAX_LOG_MAX)
+			pr_warn("[droid_lkm_vendor] pid_max %d -> %d by module parameter\n",
+				value, cap);
+		dlc_pid_max_caps++;
 		return;
 	}
 
 	if (value <= PID_MAX_DEFAULT)
 		return;
 
-	{
+	/*
+	 * Auto mode. A container raises pid_max above PID_MAX_DEFAULT so that
+	 * its forks stop wrapping, and the vendor arrays indexed by task->pid
+	 * are sized for PID_MAX_DEFAULT. Name the module once for the log, then
+	 * cap regardless: kern_path may be unresolved, and a missed cap is a
+	 * panic while an unneeded cap only costs pid range nothing uses.
+	 */
+	if (!dlc_pid_max_caps) {
 		for (i = 0; i < ARRAY_SIZE(dlc_pid_indexed_modules); i++) {
 			if (dlc_module_loaded(dlc_pid_indexed_modules[i])) {
 				pr_warn("[droid_lkm_vendor] pid_max=%d with %s loaded: pid indexed arrays are sized for %d\n",
@@ -256,21 +278,109 @@ static void dlc_ghost_audit_pid_max(void)
 				break;
 			}
 		}
-		if (i == ARRAY_SIZE(dlc_pid_indexed_modules))
-			return;
-		cap = PID_MAX_DEFAULT;
 	}
 
-	if (value <= cap)
+	WRITE_ONCE(*pid_max_addr, PID_MAX_DEFAULT);
+	if (dlc_pid_max_caps < DLC_PID_MAX_LOG_MAX)
+		pr_warn("[droid_lkm_vendor] pid_max %d -> %d, pids wrap inside the range vendor arrays cover\n",
+			value, PID_MAX_DEFAULT);
+	dlc_pid_max_caps++;
+}
+
+static struct delayed_work dlc_pid_max_work;
+static bool dlc_pid_max_watch;
+
+static void dlc_pid_max_work_fn(struct work_struct *work)
+{
+	dlc_ghost_audit_pid_max();
+
+	if (dlc_pid_max_watch)
+		schedule_delayed_work(&dlc_pid_max_work,
+				      msecs_to_jiffies(DLC_PID_MAX_WATCH_MS));
+}
+
+/*
+ * The cap used to run once from init, before any container existed, and a
+ * container raises pid_max long after that. Watch it instead of sampling it.
+ */
+static void dlc_pid_max_watch_start(void)
+{
+	if (dlc_pid_max_cap < 0)
 		return;
 
-	WRITE_ONCE(*pid_max_addr, cap);
-	pr_warn("[droid_lkm_vendor] pid_max %d -> %d, pids wrap inside the range vendor arrays cover\n",
-		value, cap);
+	if (!dlc_vendor_syms.pid_max) {
+		pr_warn("[droid_lkm_vendor] pid_max not resolved, no cap applied\n");
+		return;
+	}
+
+	dlc_ghost_audit_pid_max();
+
+	INIT_DELAYED_WORK(&dlc_pid_max_work, dlc_pid_max_work_fn);
+	dlc_pid_max_watch = true;
+	schedule_delayed_work(&dlc_pid_max_work,
+			      msecs_to_jiffies(DLC_PID_MAX_WATCH_MS));
 }
+
+static void dlc_pid_max_watch_stop(void)
+{
+	if (!dlc_pid_max_watch)
+		return;
+
+	dlc_pid_max_watch = false;
+	cancel_delayed_work_sync(&dlc_pid_max_work);
+}
+
+/*
+ * Same reason as the ddl guard: every way this fix can quietly do nothing -
+ * pid_max not resolved, the module parameter set to -1, the cap never firing
+ * because no container ever raised it - looks identical from the outside,
+ * which is "the module loaded, 6/6". Say it here instead.
+ */
+static int dlc_pid_max_show(struct seq_file *m, void *v)
+{
+	int *addr = dlc_vendor_syms.pid_max;
+
+	if (dlc_pid_max_cap < 0)
+		seq_puts(m, "state     off (pid_max_cap=-1)\n");
+	else if (!addr)
+		seq_puts(m, "state     symbol-missing (pid_max not resolved)\n");
+	else if (dlc_pid_max_watch)
+		seq_printf(m, "state     watching (%d ms)\n", DLC_PID_MAX_WATCH_MS);
+	else
+		seq_puts(m, "state     idle\n");
+
+	seq_printf(m, "target    %d\n", PID_MAX_DEFAULT);
+	seq_printf(m, "caps      %d\n", dlc_pid_max_caps);
+	if (addr)
+		seq_printf(m, "pid_max   %d\n", READ_ONCE(*addr));
+	else
+		seq_puts(m, "pid_max   unresolved\n");
+	seq_printf(m, "ghost     %s\n", dlc_ghost_ready ? "hooked" : "off");
+	return 0;
+}
+
+static int dlc_pid_max_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, dlc_pid_max_show, NULL);
+}
+
+static const struct proc_ops dlc_pid_max_pops = {
+	.proc_open	= dlc_pid_max_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+};
+
+static struct proc_dir_entry *dlc_pid_max_pde;
 
 void dlc_ghost_exit(void)
 {
+	if (dlc_pid_max_pde) {
+		proc_remove(dlc_pid_max_pde);
+		dlc_pid_max_pde = NULL;
+	}
+
+	dlc_pid_max_watch_stop();
 	ds_hook_remove(&dlc_ftbv_hook);
 	dlc_ghost_ready = false;
 }
@@ -279,21 +389,28 @@ int dlc_ghost_init(void)
 {
 	int ret;
 
+	if (!dlc_pid_max_pde)
+		dlc_pid_max_pde = proc_create("pid_max_guard", 0444, NULL,
+					      &dlc_pid_max_pops);
+
+	/* the cap stands on its own, arm it even when the ghost task is off */
+	dlc_pid_max_watch_start();
+
 	if (!dlc_ghost_enable)
 		return 0;
 
 	ret = dlc_ghost_build();
 	if (ret) {
 		pr_err("[droid_lkm_vendor] ghost: init_task not found\n");
-		return ret;
+		goto fail;
 	}
-	dlc_ghost_audit_pid_max();
 
 	dlc_module_address = (typeof(dlc_module_address))dlc_vendor_syms.module_address;
 	if (!dlc_module_address) {
 		pr_err("[droid_lkm_vendor] ghost: __module_address not found\n");
 		dlc_ghost_ready = false;
-		return -ENOENT;
+		ret = -ENOENT;
+		goto fail;
 	}
 
 	/*
@@ -313,7 +430,8 @@ int dlc_ghost_init(void)
 			       probe.state, probe.reason ? probe.reason : "?",
 			       probe.target);
 			dlc_ghost_ready = false;
-			return -EOPNOTSUPP;
+			ret = -EOPNOTSUPP;
+			goto fail;
 		}
 	}
 
@@ -321,10 +439,14 @@ int dlc_ghost_init(void)
 	if (ret) {
 		pr_err("[droid_lkm_vendor] ghost: hook find_task_by_vpid failed %d\n", ret);
 		dlc_ghost_ready = false;
-		return ret;
+		goto fail;
 	}
 	dlc_ftbv_orig = (typeof(dlc_ftbv_orig))dlc_ftbv_hook.orig;
 	pr_info("[droid_lkm_vendor] ghost: find_task_by_vpid hooked, match=%s\n",
 		dlc_ghost_match ? dlc_ghost_match : "");
 	return 0;
+
+fail:
+	dlc_pid_max_watch_stop();
+	return ret;
 }
