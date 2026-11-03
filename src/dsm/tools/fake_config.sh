@@ -7,14 +7,9 @@
 # 本机内核两项都是 "not set"，所以它直接判死，连 unshare 都不调用
 # （dmesg 里一条 unshare/clone 记录都没有），并且把 allow_sandboxing 写回 0。
 #
-# 模块在运行时能补的只有 devtmpfs（注册一个同名文件系统，让 /proc/filesystems
-# 里出现它）。userns 补不了 —— 内核没编译 CONFIG_USER_NS，模块只能在 syscall
-# 边界做 id 翻译，拿不到真正的命名空间。
-#
-# 这里把两行都改成 y，纯粹是让 App 的探测过关、不再把 allow_sandboxing 写回 0。
-# 它伪装的是「能力声明」，不是「容器真的进了 user namespace」：
-# App 读到的 CONFIG_USER_NS=y 是假的，容器进程的 uid_map 仍然是
-# 0 0 4294967295。这一点在 README.txt「真 userns —— 本机做不到」里有说明。
+# 模块已经在运行时把这两项能力补齐了（userns 走 hooks，devtmpfs 走注册的
+# 文件系统），所以这里把配置文本里这两行改成 y，再 bind mount 覆盖回
+# /proc/config.gz。App 读到的判定就和真实能力一致了。
 #
 # 原文件仍在内核里，umount /proc/config.gz 立刻恢复；卸载模块时 uninstall.sh
 # 也会做这件事。

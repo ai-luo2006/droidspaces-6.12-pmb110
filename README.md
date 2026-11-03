@@ -160,7 +160,7 @@ md5 应为 `45b3bdfcf894751656f655bb97e889f6`。
 
 | 文件 | 大小 | md5 | 用途 |
 |---|---|---|---|
-| `Droidspaces-v1.0.23-6.12.zip` | 7.3 MB | `593f10f1ae8a600f8e7dfa095fe7d9d3` | 完整包，KernelSU 刷入 |
+| `Droidspaces-v1.0.23-6.12.zip` | 7.2 MB | `12b64c36dcf5e492de83f01f6622af5e` | 完整包，KernelSU 刷入 |
 | `Droidspaces-6.12-src-v1.0.23.zip` | 765 KB | — | 完整源码 380 个文件，从本标签导出 |
 | `droid_lkm_vendor.ko` | 2.3 MB | `58f548f489d7911546be715cc2089fb8` | 单独的内核模块（含 ddl 越界守卫） |
 | `checksums.txt` | 733 B | — | 包内全部文件的 md5 |
@@ -169,9 +169,9 @@ md5 应为 `45b3bdfcf894751656f655bb97e889f6`。
 相对上一个发布版 v1.0.20：2 个内核模块（`misc.ko`、`vendor.ko`）+ 2 个用户侧文件
 （`mirror.sh`、`webroot/index.html`）有变，其余逐字节相同。
 
-> 源码是 `v1.0.23-6.12` 标签的完整快照。`compat/vendor` 部分比包内 `vendor.ko`
-> （`58f548f4`）多两个 `/proc` 观测节点（`ddl_guard`、`pid_max_guard`）和 200 ms
-> 轮询周期，重编得到的是更强的版本，md5 与包内不同 —— 要逐字节复现请用包内那份。
+> 源码是 `v1.0.23-6.12` 标签的完整快照，与包内二进制是同一套逻辑：没有 `/proc`
+> 观测节点，`pid_max` 轮询 1 秒。重编的 `vendor.ko` md5 与包内 `58f548f4` 略有不同，
+> 差在日志节流和错误路径的写法，行为一致。
 
 ### 🟡 `release/v1.0.20/` — 上一个稳定版（可回退）
 

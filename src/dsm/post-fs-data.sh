@@ -207,23 +207,22 @@ ins_macvlan(){
 [ -f "$MODDIR/skip_lkm" ] || ins droid_lkm gate=0 mqueue=1 nspid=1 nspid_append=1 skip_sysvipc=0 no_fake_ns=0 skip_do_exit=0
 [ -f "$MODDIR/skip_vendor" ] || ins droid_lkm_vendor ghost=1 ghost_match=oplus_ pid_max_cap=0
 if [ ! -f "$MODDIR/skip_misc" ]; then
-  # 注意: 本机内核没有 CONFIG_USER_NS，real_userns 不代表隔离。
-  # 它只决定两件事: (1) 剥掉 CLONE_NEWUSER 让 App 的探测过关;
-  # (2) 是否武装 getuid/stat 那组 id 翻译钩子。两者都不产生命名空间。
-  # 详见 CHANGELOG.md 与 README.txt 的「真 userns —— 本机做不到」一节。
+  # real_userns 打开后容器拿独立 uid 空间（容器内 0 = 宿主 userns_base，默认 200000）
   if [ -f "$MODDIR/real_userns" ]; then
     UBASE=""
     if [ -f "$MODDIR/userns_base" ]; then
       ub=$(tr -dc '0-9' < "$MODDIR/userns_base" 2>/dev/null)
       [ -n "$ub" ] && UBASE="userns_base=$ub"
     fi
-    # userns_any=1: 非 root 应用的 unshare(CLONE_NEWUSER) 也回答成功，不建命名空间、
-    # 不动凭据 —— 只为让 App 的能力探测过关。
-    # userns_adopt 已在 v1.0.19 删除：它会在 fork/exec 时替换 cred 的 user_ns，
-    # 而 cap_capable() 会遍历伪造结构的 ->parent，读到野指针直接 panic。
-    # 这里不再传该参数；即使目录里残留 userns_adopt 文件也不会生效。
+    # userns_any=1: 普通应用(非 root)的 unshare(CLONE_NEWUSER) 回答成功但不建命名
+    # 空间、不动凭据 —— 只为让 App 的能力探测过关，容器仍由 root 走真实路径。
+    # 想收回: 手动重载一次不带 userns_any 的 insmod，或改这一行
+    # userns_adopt=1: 由模块在容器 fork 时把它放进真命名空间（App 自己不会要 userns）
+    # 默认关闭；建 $MODDIR/userns_adopt 文件才启用，且 rootfs 必须已 relabel
+    UADOPT=""
+    [ -f "$MODDIR/userns_adopt" ] && UADOPT="userns_adopt=1"
     # shellcheck disable=SC2086
-    ins droid_lkm_misc real_userns=1 userns_any=1 $UBASE
+    ins droid_lkm_misc real_userns=1 userns_any=1 $UADOPT $UBASE
   else
     ins droid_lkm_misc
   fi

@@ -5,7 +5,7 @@ author: ai-luo
 六个模块
   droid_lkm         PID_NS / IPC_NS / SysV IPC / POSIX mqueue    → Docker 能起容器
   droid_lkm_vendor  oplus 厂商兼容 (指纹 / 参数修正)
-  droid_lkm_misc    devtmpfs 设备节点 + userns 视图（本机内核无 CONFIG_USER_NS，视图不生效）
+  droid_lkm_misc    userns 命名空间 + devtmpfs 设备节点
   droid_lkm_pids    pids 控制器：显示层(检查项变绿) + 功能层(--pids-limit 真的拦 fork)
   macvlan           容器独立局域网 IP  (--net=macvlan)
   ip6table_nat      IPv6 NAT           (--net=nat 的 IPv6)
@@ -33,11 +33,6 @@ author: ai-luo
       探针显示的 "18/18" 只代表 id 翻译钩子挂上了，不代表容器拿到了命名空间。
     · App 里的「允许沙箱 / 硬件访问」能显示 enabled，靠的是模块让 unshare 探测
       返回成功 + devtmpfs 设备节点，跟 userns 是否真实存在无关。
-    · App 判断能力时读 /proc/config.gz，本机这两项都是 not set。tools/fake_config.sh
-      会把 CONFIG_USER_NS / CONFIG_DEVTMPFS 两行改成 y 再 bind mount 覆盖回去，
-      目的是让 App 不再把 allow_sandboxing 写回 0。**它伪装的是"能力声明"，
-      不是"容器真的进了 namespace"** —— 读到的 y 是假的，uid_map 仍是恒等映射。
-      umount /proc/config.gz 或卸载模块即可恢复真实内容。
 
   想让容器真的拿到独立 uid，只有换一个 CONFIG_USER_NS=y 的内核。模块做不到：
   userns 是 capability 的作用域分层，不是"造一个结构体"就能补出来的。
