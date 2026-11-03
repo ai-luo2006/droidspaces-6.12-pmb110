@@ -165,9 +165,8 @@ md5 应为 `45b3bdfcf894751656f655bb97e889f6`。
 | `checksums.txt` | 733 B | — | 包内全部文件的 md5 |
 | `说明.md` | 4.7 KB | — | 本版改了什么、怎么验 |
 
-本版内核侧与 v1.0.22 相同（`pid_max` 持续压回 + ddl 越界改道返回 + userns RCU 修复），
-用户侧只改了 `mirror.sh` 和 `webroot/index.html` 两个文件。
-**已经在跑 v1.0.22 的，只覆盖这两个文件即可，不必重刷模块。**
+相对上一个发布版 v1.0.20：2 个内核模块（`misc.ko`、`vendor.ko`）+ 2 个用户侧文件
+（`mirror.sh`、`webroot/index.html`）有变，其余逐字节相同。
 
 ### 🟡 `release/v1.0.20/` — 上一个稳定版（可回退）
 
