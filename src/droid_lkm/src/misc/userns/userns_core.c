@@ -74,24 +74,20 @@ static u32 droid_lkm_userns_next_base(void)
 	       (idx % DROID_LKM_UID_SLOTS) * DROID_LKM_UID_BASE_STEP;
 }
 
+/*
+ * 这个函数在 inode_permission() 的 rcu-walk 里被调用，generic_permission() 那一段
+ * 仍然握着 RCU 读侧临界区。原来在这里 mutex_lock()，内核当场打
+ * "Voluntary context switch within RCU read-side critical section"，
+ * 再重一点就是 RCU stall 或死锁，所以只认一个标记：
+ * create 时 ns.ops 已经指向本模块的 proc_ns_operations，真 namespace 永远指不到它，
+ * 一次指针比较，不睡眠、不遍历、不需要锁
+ */
 bool droid_lkm_userns_is_ours(const struct user_namespace *uns)
 {
-	struct droid_lkm_userns *u;
-	bool found = false;
-
 	if (!uns)
 		return false;
 
-	mutex_lock(&droid_lkm_userns_lock);
-	list_for_each_entry(u, &droid_lkm_userns_list, link) {
-		if (&u->uns == uns) {
-			found = true;
-			break;
-		}
-	}
-	mutex_unlock(&droid_lkm_userns_lock);
-
-	return found;
+	return uns->ns.ops == droid_lkm_userns_ops();
 }
 
 struct droid_lkm_userns *droid_lkm_userns_of(struct task_struct *task)
