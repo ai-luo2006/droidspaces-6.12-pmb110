@@ -530,7 +530,10 @@ function readState(){
     "echo V=$(grep -c '^droid_lkm_vendor ' /proc/modules 2>/dev/null);" +
     "echo C=$(grep -c '^droid_lkm_misc ' /proc/modules 2>/dev/null);" +
     "echo PI=$(grep -c '^droid_lkm_pids ' /proc/modules 2>/dev/null);" +
-    "echo U=$([ -e /proc/self/uid_map ] && echo 1 || echo 0);" +
+    /* 原写法 [ -e /proc/self/uid_map ] 恒为真：这个文件任何 Linux 内核都有，
+       跟 CONFIG_USER_NS 开没开无关。真正的判据是 /proc/sys/user 这组 sysctl 在不在，
+       以及 max_user_namespaces 是不是 0（内核关了或 sysctl 设 0 都建不出 userns） */
+    "echo U=$([ -f /proc/self/ns/user ] && [ \"$(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo 0)\" != \"0\" ] && echo 1 || echo 0);" +
     "echo B=$([ -f " + M + "/no_boot ] && echo 0 || echo 1);" +
     "echo S=$([ -f " + M + "/skip_misc ] && echo 0 || echo 1);" +
     "echo P=$([ -f " + M + "/no_precheck ] && echo 0 || echo 1);" +
@@ -1078,6 +1081,11 @@ function probeCtr(){
     "for d in " + CBASE + "/*/; do [ -d \"$d\" ] || continue; c=${d%/}; n=$(basename \"$c\"); " +
     "live=0; pid=; " +
     "grep -qsF \"$c/\" /proc/mounts && live=1; " +
+    /* img 格式的容器：rootfs.img 在运行时 loop 挂到 /mnt/Droidspaces/<name>，
+       名字取 container.config 里的 name= 字段，取不到就退回目录名。
+       少了这一条，img 容器只能靠 cgroup 兜底，容易出现「App 显示运行中、这里显示未运行」 */
+    "cn=$(sed -n 's/^name=//p' \"$c/container.config\" 2>/dev/null | tr -d '\\r' | head -1); [ -z \"$cn\" ] && cn=$n; " +
+    "[ -d \"/mnt/Droidspaces/$cn/etc\" ] && live=1; " +
     "if [ \"$live\" = 0 ]; then grep -qsF \"$c/rootfs\" /proc/[0-9]*/mountinfo 2>/dev/null && live=1; fi; " +
     "h=$(echo \"$R\" | grep -F \"$c/rootfs\" | head -1); " +
     "if [ -n \"$h\" ]; then live=1; pid=$(echo \"$h\" | cut -d/ -f3); fi; " +
@@ -1300,13 +1308,13 @@ function showSrc(idx){
   var it = ctrItems[idx];
   if(!it){ toast("容器信息已过期，请刷新列表"); return; }
   var name = it.name;
-  /* 新版 Ubuntu 用 deb822 格式（sources.list.d/ubuntu.sources），只有旧版才有 sources.list */
-  var A = CBASE + "/" + q1(name) + "/rootfs/etc/apt";
-  return sh("cat " + A + "/sources.list 2>/dev/null" +
-            " || cat " + A + "/sources.list.d/ubuntu.sources 2>/dev/null" +
-            " || echo '(文件不存在，容器可能尚未初始化)'")
+  /* 旧写法拼的是 CBASE/name/rootfs/etc/apt，只对「展开目录」成立。
+     img 格式的容器 rootfs 是 rootfs.img，代码里根本不存在 rootfs/ 这个目录，
+     所以永远显示「文件不存在」。改成交给 mirror.sh 判断存储形态。 */
+  return sh("sh " + M + "/mirror.sh src " + q1(name) + " 2>&1")
   .then(function(r){
-    setLog("【" + name + " 的 sources.list】\n" + ((r.stdout||"").trim() || "(空)"));
+    var txt = ((r.stdout||"") + (r.stderr||"")).trim() || "(无输出)";
+    setLog("【" + name + " 的软件源】\n" + txt);
     toast("已显示在日志页");
   });
 }
@@ -1373,7 +1381,11 @@ function doDiag(){
     "cp " + M + "/load.log $D/ 2>/dev/null; cp " + M + "/history.log $D/ 2>/dev/null;" +
     "ls -l " + M + " " + M + "/ko > $D/files.txt 2>&1; md5sum " + M + "/ko/*.ko >> $D/files.txt 2>&1;" +
     "ls -d " + CBASE + "/*/ 2>/dev/null > $D/containers.txt;" +
+    "echo '=== /mnt/Droidspaces ===' >> $D/containers.txt; ls -l /mnt/Droidspaces/ >> $D/containers.txt 2>&1;" +
+    "grep -F ' /mnt/Droidspaces' /proc/mounts >> $D/containers.txt 2>&1;" +
+    "for f in " + CBASE + "/*/container.config; do echo \"## $f\"; cat \"$f\" 2>/dev/null; done >> $D/containers.txt 2>&1;" +
     "for c in " + CBASE + "/*/rootfs; do echo \"## $c\"; head -3 $c/etc/apt/sources.list 2>/dev/null; cat $c/etc/resolv.conf 2>/dev/null; done >> $D/containers.txt 2>&1;" +
+    "echo '=== mirror.sh list ===' >> $D/containers.txt; sh " + M + "/mirror.sh list >> $D/containers.txt 2>&1;" +
     "tar czf $D.tgz -C $(dirname $D) $(basename $D) 2>/dev/null && rm -rf $D;" +
     "echo \"诊断包: $D.tgz\"; ls -l $D.tgz 2>/dev/null || echo '打包失败'"
   ).then(function(r){
