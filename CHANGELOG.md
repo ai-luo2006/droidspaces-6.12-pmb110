@@ -6,7 +6,8 @@
 
 | 版本 | 状态 | ko md5 前缀 | 一句话 |
 |---|---|---|---|
-| v1.0.20 | 🟢 | `15fc08cb` | WebUI 修正，禁用危险按钮（**当前版本**） |
+| v1.0.23 | 🟢 | `29f50640` | 换源重写：支持 `rootfs.img` + deb822 + ForceIPv4（**当前版本**） |
+| v1.0.20 | 🟢 | `15fc08cb` | WebUI 修正，禁用危险按钮 |
 | v1.0.19 | 🟢 | `15fc08cb` | 删掉换凭据路径，止住重启（**稳定基线**） |
 | v1.0.18 | 🔴 | `25583035` | `kernel_clone` 钩子，两次整机重启 |
 | v1.0.17 | 🟠 | — | 建成 mnt ns，但子进程凭据未切换 |
@@ -17,6 +18,59 @@
 | v1.0.12 | 🟡 | — | relabel 脚本重写为 toybox 兼容 |
 | v1.0.11 | ⚪ | — | relabel 用 `find -exec {} +`，Android 不支持 |
 | v1.0.10 | ⚪ | — | 本项目基线 |
+
+---
+
+## v1.0.23 (2026-11-03)
+
+用户侧两个文件重写，内核模块与 v1.0.22 逐字节相同（`misc.ko` = `29f50640`，
+`vendor.ko` = `58f548f4`）。已经在跑 v1.0.22 的只覆盖这两个文件即可，不必重刷模块。
+
+| 文件 | v1.0.22 | v1.0.23 |
+|---|---|---|
+| `mirror.sh` | 7433 B `4dedaedae8d60dfc75fd98fb7a356211` | 13007 B `dac5ab5398bc0513eb994c036c716854` |
+| `webroot/index.html` | 76716 B `75f679574e0347b46eead02789b405a7` | 78030 B `45b3bdfcf894751656f655bb97e889f6` |
+
+### 换源：只认展开目录，`rootfs.img` 容器一律失败
+
+原实现 `[ -d "$c/rootfs/etc" ]` 判断容器是否存在，只对「展开目录」布局成立。
+本机容器是 8 GB 镜像 + loop 挂载（`/dev/block/loop12 /mnt/Droidspaces/ai ext4 rw`），
+`rootfs/` 这个目录根本不存在 —— 于是「容器总数: 0」，改完也没效果。
+
+`ctr_root()` 改为五级回退：展开目录 → `container.config` 的 `name=` 拼
+`/mnt/Droidspaces/<name>` → `rootfs_path` 是目录 → 扫 `/proc/mounts` 名字匹配 →
+借容器进程 `/proc/<pid>/root`。取不到就明确说明原因（未运行 / 目录异常 / 两种都没有）。
+
+同时修 `do_src` 的位置参数：函数内 `$2` 拿不到脚本参数，会错误地回退到第一个容器。
+
+### deb822：改了 `sources.list` 等于没改
+
+Debian 12+ / Ubuntu 24.04+ 默认读 `sources.list.d/*.sources`。原版无条件写 `sources.list`，
+真机上表现为「换源成功但 `apt update` 还是走官方源」，还容易因为双份配置触发
+`Target Packages is configured multiple times`。
+
+现在检测到 `*.sources` 就改写 deb822，并把旧 `sources.list` 整份注释停用；发布版识别补了
+debian 分支（之前 Debian 容器会被硬按 Ubuntu 的地址写），版本代号取不到时回退 ustc 而不是跳过。
+
+### IPv6 黑洞：`Temporary failure resolving`
+
+容器从路由通告拿到 `default via fe80::1`，glibc 因此认为 IPv6 可用，apt 优先连 AAAA；
+那个网关并不真转发 IPv6，于是全部超时。
+
+DNS 动作写入 `Acquire::ForceIPv4 "true"`，并在 `gai.conf` 设
+`precedence ::ffff:0:0/96 100`，让 curl / pip / docker 一起避开。
+
+### 检测页三处判定
+
+- `probeCtr()` 只认 `Containers/<name>/rootfs` 在 `/proc/mounts` 里 —— img 格式的容器挂的是
+  `/mnt/Droidspaces/<name>`，永远对不上。补 `container.config` 的 `name=` 判据
+- `U=$([ -e /proc/self/uid_map ])` 恒为真（任何 Linux 内核都有这个文件），改成同时看
+  `/proc/self/ns/user` 和 `max_user_namespaces` 是否为 0
+- `showSrc()` 在 JS 里拼 `Containers/<name>/rootfs/etc/apt`，同样只对展开目录成立；
+  改为调用 `mirror.sh src`，存储形态的判断只留一份
+
+诊断包（`doDiag`）加入 `/mnt/Droidspaces` 挂载表、每个容器的 `container.config` 全文、
+`mirror.sh list` 输出。
 
 ---
 

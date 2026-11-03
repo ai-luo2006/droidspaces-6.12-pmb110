@@ -5,9 +5,10 @@
 目标机型：**一加 Ace 6 至尊版（PMB110）**，内核 `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`
 
 ```
-当前版本   v1.0.20-6.12
+当前版本   v1.0.23-6.12
 状态       ✅ 稳定可用（真机验证通过）
-最新内核   droid_lkm_misc.ko  md5 15fc08cbd67c06c3aa079bedd75b51bc
+最新内核   droid_lkm_misc.ko  md5 29f50640e5a22d09e585642fcbfd1bf4
+           droid_lkm_vendor.ko md5 58f548f489d7911546be715cc2089fb8
 真机结果   容器可启动 · su 正常 · apt 可用 · 不崩溃
 ```
 
@@ -123,7 +124,7 @@
 
 ### 方式 A：完整包（推荐首次安装）
 
-KernelSU → 模块 → 安装 → 选 `release/v1.0.20/Droidspaces-v1.0.20-6.12.zip` → 重启
+KernelSU → 模块 → 安装 → 选 `release/v1.0.23/Droidspaces-v1.0.23-6.12.zip` → 重启
 
 首次安装**默认关闭开机自启**（`no_boot` 存在），需要手动点一次「加载」验证手机正常，
 再回 WebUI 打开「开机自动加载」。
@@ -140,7 +141,7 @@ su -c 'droidspaces --config=/data/local/Droidspaces/Containers/root/container.co
        md5sum /data/adb/modules/Droidspaces/ko/droid_lkm_misc.ko'
 ```
 
-md5 应为 `15fc08cbd67c06c3aa079bedd75b51bc`。
+md5 应为 `29f50640e5a22d09e585642fcbfd1bf4`。
 
 ### 方式 C：只换 WebUI 页面（最轻）
 
@@ -149,13 +150,26 @@ su -c 'cp /sdcard/Download/webui-index.html /data/adb/modules/Droidspaces/webroo
        md5sum /data/adb/modules/Droidspaces/webroot/index.html'
 ```
 
-md5 应为 `75f679574e0347b46eead02789b405a7`。
+md5 应为 `45b3bdfcf894751656f655bb97e889f6`。
 
 ---
 
 ## 文件标注
 
-### 🟢 `release/v1.0.20/` — 当前版本，用这个
+### 🟢 `release/v1.0.23/` — 当前版本，用这个
+
+| 文件 | 大小 | md5 | 用途 |
+|---|---|---|---|
+| `Droidspaces-v1.0.23-6.12.zip` | 7.3 MB | `593f10f1ae8a600f8e7dfa095fe7d9d3` | 完整包，KernelSU 刷入 |
+| `droid_lkm_vendor.ko` | 2.3 MB | `58f548f489d7911546be715cc2089fb8` | 单独的内核模块（含 ddl 越界守卫） |
+| `checksums.txt` | 733 B | — | 包内全部文件的 md5 |
+| `说明.md` | 4.7 KB | — | 本版改了什么、怎么验 |
+
+本版内核侧与 v1.0.22 相同（`pid_max` 持续压回 + ddl 越界改道返回 + userns RCU 修复），
+用户侧只改了 `mirror.sh` 和 `webroot/index.html` 两个文件。
+**已经在跑 v1.0.22 的，只覆盖这两个文件即可，不必重刷模块。**
+
+### 🟡 `release/v1.0.20/` — 上一个稳定版（可回退）
 
 | 文件 | 大小 | md5 | 用途 |
 |---|---|---|---|
@@ -165,6 +179,9 @@ md5 应为 `75f679574e0347b46eead02789b405a7`。
 | `userns.sh` | 12 KB | `4c49905b36aeeac95460730762eb42f1` | 属主脚本（relabel 已加护栏） |
 | `fake_config.sh` | 1.8 KB | `2c5f89b7baed20a0544bd22064f43ade` | 见下方 ⚠️ |
 | `Droidspaces-6.12-src-v1.0.20.zip` | 710 KB | `8a60aef52cd7192ba71c6a6b8a969ae1` | 源码快照（ko 相同，文档以本仓库为准） |
+
+> ⚠️ v1.0.20 包内的 `droid_lkm_misc.ko`（`15fc08cb`）**不含 userns RCU 修复**，
+> 容器启动后存在整机卡死的风险。回退只建议用来对照 WebUI 行为，内核请用 v1.0.23 的。
 
 > 这些 zip 是**二进制交付物**，里面的 README / 教程是打包当天的快照。
 > 之后文档有更新（纯图界面章、教程 07 等）只改仓库里的 `README.md` 和 `docs/`，不重打包 ——
